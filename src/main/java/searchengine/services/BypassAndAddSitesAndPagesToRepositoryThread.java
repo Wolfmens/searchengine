@@ -5,7 +5,6 @@ import searchengine.model.Site;
 import searchengine.model.Type;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 
 public class BypassAndAddSitesAndPagesToRepositoryThread extends Thread {
@@ -16,7 +15,7 @@ public class BypassAndAddSitesAndPagesToRepositoryThread extends Thread {
 
     public BypassAndAddSitesAndPagesToRepositoryThread(SitesRepository sitesRepository,
                                                        searchengine.config.Site site,
-                                                       IndexingService indexingService){
+                                                       IndexingService indexingService) {
         this.siteConfig = site;
         repository = sitesRepository;
         this.indexingService = indexingService;
@@ -24,26 +23,30 @@ public class BypassAndAddSitesAndPagesToRepositoryThread extends Thread {
 
     @Override
     public void run() {
-            while (!isInterrupted()){
-                Site site = new Site();
-                site.setUrl(siteConfig.getUrl());
-                site.setStatus(Type.INDEXING);
-                site.setName(siteConfig.getName());
-                site.setStatusTime(LocalDateTime.now());
-                repository.save(site);
-                bypassSitesAndSetPagesToRepository(site);
-                repository.save(site);
-                break;
-            }
+            Site site = new Site();
+            site.setUrl(siteConfig.getUrl());
+            site.setStatus(Type.INDEXING);
+            site.setName(siteConfig.getName());
+            site.setStatusTime(LocalDateTime.now());
+            repository.save(site);
+            bypassSitesAndSetPagesToRepository(site);
+            repository.save(site);
     }
 
-    private void bypassSitesAndSetPagesToRepository(Site site){
+    private void bypassSitesAndSetPagesToRepository(Site site) {
         String url = site.getUrl();
-        NodeWebsite root = new NodeWebsite(url,site);
-        BypassSites bypassSites = new BypassSites(root,indexingService);
+        NodeWebsite root = new NodeWebsite(url, site);
+        BypassSites bypassSites = new BypassSites(root, indexingService);
         ForkJoinPool pool = new ForkJoinPool();
-        pool.invoke(bypassSites);
-        site.setStatus(Type.INDEXED);
-        site.setStatusTime(LocalDateTime.now());
+        boolean isEndIndexProcess = pool.invoke(bypassSites);
+        if (!isEndIndexProcess) {
+            site.setStatus(Type.FAILED);
+            site.setStatusTime(LocalDateTime.now());
+            site.setLastError("Индексация остановлена пользователем");
+            indexingService.getPathList().clear();
+        } else {
+            site.setStatus(Type.INDEXED);
+            site.setStatusTime(LocalDateTime.now());
+        }
     }
 }

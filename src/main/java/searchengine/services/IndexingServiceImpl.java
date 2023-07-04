@@ -3,16 +3,12 @@ package searchengine.services;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import searchengine.model.NodeWebsite;
 import searchengine.model.Site;
 import searchengine.config.SitesList;
-import searchengine.model.Type;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.ForkJoinPool;
 
 @Service
 @RequiredArgsConstructor
@@ -21,7 +17,7 @@ public class IndexingServiceImpl implements IndexingService{
     private final SitesList sites;
     private final ArrayList<Thread> threads = new ArrayList<>();
     private HashSet<String> pathList = new HashSet<>();
-    private boolean isStatusIndex;
+    private volatile boolean isStatusIndex;
 
 
     @Autowired
@@ -48,7 +44,8 @@ public class IndexingServiceImpl implements IndexingService{
 
     private void setSitesAndPagesToRepository() {
         sites.getSites().forEach(s -> {
-            threads.add(new BypassAndAddSitesAndPagesToRepositoryThread(sitesRepository,s,this));
+            Thread thread = new BypassAndAddSitesAndPagesToRepositoryThread(sitesRepository,s,this);
+            threads.add(thread);
         });
         threads.forEach(Thread::start);
     }
@@ -59,15 +56,13 @@ public class IndexingServiceImpl implements IndexingService{
             for (Thread thread : threads){
                 Thread.State state = thread.getState();
                 if (!state.equals(Thread.State.TERMINATED)){
-                    try {
-                        Thread.sleep(500);
-                    } catch (InterruptedException e) {
-                        thread.interrupt();
-                    }
-
+                    Thread thread1 = new Thread(new InterapterThread(thread));
+                    thread1.start();
                 }
+
             }
             setStatusIndex(false);
+            threads.clear();
             return true;
         }
         return false;
