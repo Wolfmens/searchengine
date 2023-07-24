@@ -1,11 +1,10 @@
 package searchengine.controllers;
 
+import org.hibernate.annotations.Parameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.services.IndexingService;
 import searchengine.services.StatisticsService;
@@ -32,13 +31,13 @@ public class ApiController {
 
     @GetMapping(value = "/startIndexing", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Object> indexing() {
-        if (!indexingService.isStatusIndex()){
+        if (!indexingService.isStatusIndex()) {
             indexingService.setStatusIndex(true);
             if (indexingService.indexing()) {
                 return ResponseEntity
                         .status(HttpStatus.OK)
                         .body(Map.of("result", true));
-        } else {
+            } else {
                 return ResponseEntity
                         .status(HttpStatus.BAD_REQUEST)
                         .body(Map.of("result", false));
@@ -53,8 +52,8 @@ public class ApiController {
 
     @GetMapping(value = "/stopIndexing", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Object> stopIndexing() {
-        if (indexingService.isStatusIndex()){
-            if (indexingService.stopIndex()){
+        if (indexingService.isStatusIndex()) {
+            if (indexingService.stopIndex()) {
                 return ResponseEntity
                         .status(HttpStatus.OK)
                         .body(Map.of("result", true));
@@ -70,5 +69,24 @@ public class ApiController {
                             "error", "Индексация не запущена"));
         }
     }
+
+    @PostMapping(value = "/indexPage", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Object> addOrUpdateSeparatePage(@RequestParam String url) {
+        if (indexingService.action(url)) {
+            return ResponseEntity
+                    .status(HttpStatus.OK)
+                    .body(Map.of("result", true));
+        } else {
+            return ResponseEntity
+                    .status(HttpStatus.OK)
+                    .body(Map.of("result", false,
+                            "error", "Данная страница находится за пределами сайтов, \n" +
+                                    "указанных в конфигурационном файле\n"));
+        }
+    }
+
+
+
+
 
 }

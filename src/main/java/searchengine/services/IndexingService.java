@@ -1,7 +1,13 @@
 package searchengine.services;
 
+import searchengine.config.SerenaSearchBot;
+import searchengine.model.Lemma;
+import searchengine.model.Page;
+import searchengine.model.Site;
+
 import java.util.Collection;
-import java.util.Properties;
+import java.util.HashMap;
+import java.util.List;
 
 public interface IndexingService {
 
@@ -13,4 +19,8 @@ public interface IndexingService {
     SitesRepository getSitesRepository();
     void addPathToList(String url);
     Collection<String> getPathList();
+    SerenaSearchBot getSerenaSearchBot();
+    boolean action(String url);
+    LemmaRepository getLemmaRepository();
+    IndexLemmaRepository getIndexLemmaRepository();
 }

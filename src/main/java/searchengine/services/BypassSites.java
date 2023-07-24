@@ -34,62 +34,80 @@ public class BypassSites extends RecursiveTask<Boolean> {
         try {
             Thread.sleep(500);
             LinkedHashSet<BypassSites> subTask = new LinkedHashSet<>();
-            Document document = Jsoup.connect(url).timeout(200000).get();
-            Elements elements = document.select("a");
+            Document document = Jsoup.connect(url).timeout(200000)
+                    .userAgent(indexingService.getSerenaSearchBot().getUserAgent())
+                    .referrer(indexingService.getSerenaSearchBot().getReferrer())
+                    .get();
             setFieldsOfPage(document,url, page);
-            Optional<Page> optional = indexingService.getPageRepository().findByPath(url);
-            if (!optional.isPresent()) {
-                saveToRepository(page);
-            }
-            indexingService.addPathToList(url);
-            for (Element element : elements) {
-                String urlOfElement = element.attr("abs:href");
-                boolean hasHeadURL = urlOfElement.matches(nodeWebsite.getSite().getUrl() + "/.+");
-                boolean hasNotURLByElementsWebsite = urlOfElement.matches(nodeWebsite.getSite().getUrl() + ".*#.*");
-
-                if (urlOfElement.matches("http.*") && hasHeadURL) {
-                    if (nodeWebsite.getLinks().contains(urlOfElement)
-                            || indexingService.getPathList().contains(urlOfElement)
-                            || hasNotURLByElementsWebsite) {
-                        continue;
-                    }
-                    if (!indexingService.isStatusIndex()) {
-                        addPageToRepositoryIfBypassStop(urlOfElement);
-                        System.err.println(urlOfElement + " - " + " завершено");
-                    } else {
-                        forkBypass(urlOfElement,subTask);
+                Elements elements = document.select("a");
+                Optional<Page> optional = indexingService.getPageRepository().findByPath(url);
+                if (!optional.isPresent()) {
+                    saveToRepository(page);
+                    if (!isStatusCodeGood(page)) {
+                        transformationWebHtmlInLemmas(document, page);
                     }
                 }
-            }
-            for (BypassSites bypass : subTask) {
-               bypass.join();
-            }
+                indexingService.addPathToList(url);
+                for (Element element : elements) {
+                    String urlOfElement = element.attr("abs:href");
+                    boolean hasHeadURL = urlOfElement.matches(nodeWebsite.getSite().getUrl() + "/.+");
+                    boolean hasNotURLByElementsWebsite = urlOfElement.matches(nodeWebsite.getSite().getUrl() + ".*#.*");
+
+                    if (urlOfElement.matches("http.*") && hasHeadURL) {
+                        if (nodeWebsite.getLinks().contains(urlOfElement)
+                                || indexingService.getPathList().contains(urlOfElement)
+                                || hasNotURLByElementsWebsite) {
+                            continue;
+                        }
+                        if (!indexingService.isStatusIndex()) {
+                            addPageToRepositoryIfBypassStop(urlOfElement);
+                            System.err.println(urlOfElement + " - " + " завершено");
+                        } else {
+                            forkBypass(urlOfElement, subTask);
+                        }
+                    }
+                }
+                for (BypassSites bypass : subTask) {
+                    bypass.join();
+                }
         } catch (Error er){
             Site site = nodeWebsite.getSite();
             site.setStatus(Type.FAILED);
             site.setLastError(er.getMessage());
             indexingService.getSitesRepository().save(site);
         } catch (Exception ex){
-            System.err.println(ex.getClass() + " --- " + ex.getMessage());
+            ex.printStackTrace();
+//            System.err.println(ex.getClass() + " --- " + ex.getMessage());
         }
         return indexingService.isStatusIndex();
     }
 
-    private void setFieldsOfPage(Document doc, String url, Page page) {
+    private boolean isStatusCodeGood(Page page){
+        String statusCode = String.valueOf(page.getCode());
+        char firstSymbol = statusCode.charAt(0);
+        return firstSymbol == '4' || firstSymbol == '5';
+    }
+
+    private void setFieldsOfPage(Document doc, String url, Page page) throws Exception {
         int statusCode = doc.connection().response().statusCode();
         page.setContent(doc.toString());
         page.setPath(url);
         page.setSiteId(nodeWebsite.getSite());
         page.setCode(statusCode);
+//        transformationWebHtmlInLemmas(doc, page);
     }
 
     private void addPageToRepositoryIfBypassStop(String url) throws Exception {
-        Document document = Jsoup.connect(url).timeout(200000).get();
+        Document document = Jsoup.connect(url).timeout(200000)
+                .userAgent(indexingService.getSerenaSearchBot().getUserAgent())
+                .referrer(indexingService.getSerenaSearchBot().getReferrer())
+                .get();
         Page page = new Page();
         setFieldsOfPage(document, url, page);
         Optional<Page> optional = indexingService.getPageRepository().findByPath(url);
         if (!optional.isPresent()) {
            saveToRepository(page);
+           transformationWebHtmlInLemmas(document, page);
         }
         indexingService.addPathToList(url);
     }
@@ -106,6 +124,11 @@ public class BypassSites extends RecursiveTask<Boolean> {
         indexingService.getPageRepository().save(page);
         nodeWebsite.getSite().setStatusTime(LocalDateTime.now());
         indexingService.getSitesRepository().save(nodeWebsite.getSite());
+    }
+
+    private void transformationWebHtmlInLemmas (Document doc, Page page) throws Exception {
+            ReturnLemmas returnLemmas = new ReturnLemmas(indexingService, nodeWebsite.getSite(), page);
+            returnLemmas.getLemmas(doc.toString());
     }
 
 }

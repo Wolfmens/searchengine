@@ -4,15 +4,13 @@ import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
-import javax.persistence.Index;
 import javax.validation.constraints.NotNull;
 
-@Entity
 @Getter
 @Setter
-@Table(name = "page", indexes = {
-        @Index(name = "path_index", columnList = "path")})
-public class Page {
+@Entity
+@Table(name = "lemma")
+public class Lemma {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,15 +22,17 @@ public class Page {
     @JoinColumn(name = "site_id", nullable = false)
     private Site siteId;
 
+    @Column(columnDefinition = "VARCHAR(255)")
+    @NotNull
+    private String lemma;
 
     @NotNull
-    @Column(columnDefinition = "VARCHAR(255)", unique = true)
-    private String path;
+    private int frequency;
 
-    @NotNull
-    private int code;
 
-    @NotNull
-    @Column(columnDefinition = "MEDIUMTEXT")
-    private String content;
+
+
+
+
+
 }

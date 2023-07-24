@@ -9,6 +9,8 @@ import searchengine.dto.statistics.StatisticsData;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
 
+import java.sql.Timestamp;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -18,6 +20,7 @@ import java.util.Random;
 public class StatisticsServiceImpl implements StatisticsService {
 
     private final Random random = new Random();
+    private final IndexingService indexingService;
     private final SitesList sites;
 
     @Override
@@ -28,7 +31,6 @@ public class StatisticsServiceImpl implements StatisticsService {
                 "Ошибка индексации: сайт не доступен",
                 ""
         };
-
         TotalStatistics total = new TotalStatistics();
         total.setSites(sites.getSites().size());
         total.setIndexing(true);
@@ -40,25 +42,30 @@ public class StatisticsServiceImpl implements StatisticsService {
             DetailedStatisticsItem item = new DetailedStatisticsItem();
             item.setName(site.getName());
             item.setUrl(site.getUrl());
-            int pages = random.nextInt(1_000);
-            int lemmas = pages * random.nextInt(1_000);
+            int pages = (int) indexingService.getPageRepository().count();
+            int lemmas = (int) indexingService.getLemmaRepository().count();
             item.setPages(pages);
             item.setLemmas(lemmas);
-            item.setStatus(statuses[i % 3]);
-            item.setError(errors[i % 3]);
-            item.setStatusTime(System.currentTimeMillis() -
-                    (random.nextInt(10_000)));
+            searchengine.model.Site siteFromRepository = indexingService.getSitesRepository()
+                                                         .findByUrl(site.getUrl())
+                                                         .get();
+            String statusSite = siteFromRepository.getStatus().name();
+            item.setStatus(statusSite);
+            String error = siteFromRepository.getLastError();
+            item.setError(error);
+            item.setStatusTime(Timestamp.valueOf(siteFromRepository.getStatusTime()).getTime());
             total.setPages(total.getPages() + pages);
             total.setLemmas(total.getLemmas() + lemmas);
             detailed.add(item);
         }
-
         StatisticsResponse response = new StatisticsResponse();
         StatisticsData data = new StatisticsData();
-        data.setTotal(total);
         data.setDetailed(detailed);
+        data.setTotal(total);
+
         response.setStatistics(data);
         response.setResult(true);
+
         return response;
     }
 }
