@@ -3,6 +3,7 @@ package searchengine.services;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.Site;
 
@@ -16,4 +17,10 @@ public interface PageRepository extends JpaRepository<Page,Integer> {
     List<Page> deleteBySiteId(Site site);
 
     Optional<Page> findByPath (String path);
+
+    List<Page> findAllBySiteId (Site site);
+
+
+
+
 }

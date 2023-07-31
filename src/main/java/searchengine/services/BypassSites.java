@@ -84,8 +84,7 @@ public class BypassSites extends RecursiveTask<Boolean> {
 
     private boolean isStatusCodeGood(Page page){
         String statusCode = String.valueOf(page.getCode());
-        char firstSymbol = statusCode.charAt(0);
-        return firstSymbol == '4' || firstSymbol == '5';
+        return statusCode.startsWith("4") || statusCode.startsWith("5");
     }
 
     private void setFieldsOfPage(Document doc, String url, Page page) throws Exception {

@@ -47,7 +47,7 @@ public class BypassAndAddSitesAndPagesToRepositoryThread extends Thread {
         } else {
             site.setStatus(Type.INDEXED);
             site.setStatusTime(LocalDateTime.now());
-//            indexingService.setStatusIndex(false);   что бы заново потом можно было индексировать
+//            indexingService.setStatusIndex(false);   что бы заново потом можно было индексировать после индексации
         }
     }
 }

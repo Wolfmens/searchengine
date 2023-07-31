@@ -72,6 +72,7 @@ public class IndexingServiceImpl implements IndexingService {
     public boolean stopIndex() {
         if (isStatusIndex) {
             setStatusIndex(false);
+//            threads.forEach(Thread::interrupt); проверить +++++++++++++++
             threads.clear();
             return true;
         }

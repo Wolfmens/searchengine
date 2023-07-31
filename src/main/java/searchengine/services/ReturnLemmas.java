@@ -53,7 +53,7 @@ public class ReturnLemmas {
     private void addIndexToRepository() {
         for (Map.Entry<String, Integer> entry : lemmasMap.entrySet()) {
             Index index = new Index();
-            Lemma lemma = indexingService.getLemmaRepository().findByLemma(entry.getKey()).get();
+            Lemma lemma = indexingService.getLemmaRepository().findByLemma(entry.getKey()).get(0);
             index.setPageId(page);
             index.setLemmaId(lemma);
             index.setRank(entry.getValue());
@@ -83,14 +83,14 @@ public class ReturnLemmas {
     }
 
     private boolean hasLemmaInRepository(String lemma) {
-        Optional<Lemma> hasLemma = indexingService.getLemmaRepository().findByLemma(lemma);
-        return hasLemma.isPresent();
+        List<Lemma> hasLemma = indexingService.getLemmaRepository().findByLemma(lemma);
+        return hasLemma.isEmpty();
     }
 
     private void addLemmaToRepository(String lemma) {
         Lemma lemmaEntity;
-        if (hasLemmaInRepository(lemma)) {
-            lemmaEntity = indexingService.getLemmaRepository().findByLemma(lemma).get();
+        if (!hasLemmaInRepository(lemma)) {
+            lemmaEntity = indexingService.getLemmaRepository().findByLemma(lemma).get(0);
             int frequency = lemmaEntity.getFrequency();
             lemmaEntity.setFrequency(frequency + 1);
         } else {
@@ -118,10 +118,10 @@ public class ReturnLemmas {
         }
         List<Index> indexesByPage = indexingService.getIndexLemmaRepository().findAllByPageId(page);
         for (Map.Entry<String, Integer> entry : lemmasMap.entrySet()) {
-            Optional<Lemma> lemma = indexingService.getLemmaRepository().findByLemma(entry.getKey());
-            if (lemma.isPresent()) {
+            List<Lemma> lemma = indexingService.getLemmaRepository().findByLemma(entry.getKey());
+            if (!lemma.isEmpty()) {
                 Optional<Index> index = indexesByPage.stream()
-                        .filter(i -> i.getLemmaId().getId() == lemma.get().getId())
+                        .filter(i -> i.getLemmaId().getId() == lemma.get(0).getId())
                         .findFirst();
                 if (index.isPresent()) {
                     if (index.get().getRank() != entry.getValue()) {
@@ -131,13 +131,13 @@ public class ReturnLemmas {
                 } else {
                     Index newIndex = new Index();
                     newIndex.setPageId(page);
-                    newIndex.setLemmaId(lemma.get());
+                    newIndex.setLemmaId(lemma.get(0));
                     newIndex.setRank(entry.getValue());
                     indexingService.getIndexLemmaRepository().save(newIndex);
                 }
             } else {
                 addLemmaToRepository(entry.getKey());
-                Lemma lemmaFromRepository = indexingService.getLemmaRepository().findByLemma(entry.getKey()).get();
+                Lemma lemmaFromRepository = indexingService.getLemmaRepository().findByLemma(entry.getKey()).get(0);
                 Index newIndex = new Index();
                 newIndex.setPageId(page);
                 newIndex.setLemmaId(lemmaFromRepository);
