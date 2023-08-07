@@ -25,17 +25,11 @@ public class ReturnLemmas {
         String textNew = getStringsOfURL(text);
         String regex = "[^а-яА-Я\\s]";
         String newtext = textNew.toLowerCase().replaceAll(regex, " ").strip();
-//        if (textNew.equals("")) {
-//            textNew = "";
-//        }
         String[] textForGetLemmas = newtext.split("\\s+");
         LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
         List<String> wordBaseForms = new ArrayList<>();
-        HashSet<String> a = new HashSet<>();
         for (String word : textForGetLemmas) {
-            if (checkWordByServiceForm(word, luceneMorphology)) {
-                continue;
-            } else {
+            if (!checkWordByServiceForm(word, luceneMorphology)) {
                 String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
                 if (!wordBaseForms.contains(wordBaseForm)) {
                     addLemmaToRepository(wordBaseForm);
@@ -44,20 +38,13 @@ public class ReturnLemmas {
                 addLemmaToMap(wordBaseForm);
             }
         }
-//        wordBaseForms.forEach(this::addLemmaToRepository);
-//        a.forEach(this::addLemmaToRepository);
-//        wordBaseForms.forEach(this::addLemmaToMap);
         addIndexToRepository();
     }
 
     private void addIndexToRepository() {
         for (Map.Entry<String, Integer> entry : lemmasMap.entrySet()) {
-            Index index = new Index();
             Lemma lemma = indexingService.getLemmaRepository().findByLemma(entry.getKey()).get(0);
-            index.setPageId(page);
-            index.setLemmaId(lemma);
-            index.setRank(entry.getValue());
-            indexingService.getIndexLemmaRepository().save(index);
+            createIndexAndAddHimInRepository(lemma,entry.getValue());
         }
     }
 
@@ -109,9 +96,7 @@ public class ReturnLemmas {
         String[] textForGetLemmas = newtext.split("\\s+");
         LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
         for (String word : textForGetLemmas) {
-            if (checkWordByServiceForm(word, luceneMorphology)) {
-                continue;
-            } else {
+            if (!checkWordByServiceForm(word, luceneMorphology)) {
                 String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
                 addLemmaToMap(wordBaseForm);
             }
@@ -129,49 +114,21 @@ public class ReturnLemmas {
                         indexingService.getIndexLemmaRepository().save(index.get());
                     }
                 } else {
-                    Index newIndex = new Index();
-                    newIndex.setPageId(page);
-                    newIndex.setLemmaId(lemma.get(0));
-                    newIndex.setRank(entry.getValue());
-                    indexingService.getIndexLemmaRepository().save(newIndex);
+                    createIndexAndAddHimInRepository(lemma.get(0),entry.getValue());
                 }
             } else {
                 addLemmaToRepository(entry.getKey());
                 Lemma lemmaFromRepository = indexingService.getLemmaRepository().findByLemma(entry.getKey()).get(0);
-                Index newIndex = new Index();
-                newIndex.setPageId(page);
-                newIndex.setLemmaId(lemmaFromRepository);
-                newIndex.setRank(entry.getValue());
-                indexingService.getIndexLemmaRepository().save(newIndex);
+                createIndexAndAddHimInRepository(lemmaFromRepository,entry.getValue());
             }
         }
     }
-}
 
-//    public HashMap<String, Integer> getLemmas(String text) throws Exception {
-//        HashMap<String, Integer> lemmasMap = new HashMap<>();
-//        String textNew = getStringsOfURL(text);
-//        String regex = "[^а-яА-Я\\s]";
-//        String newtext = textNew.toLowerCase().replaceAll(regex, " ").strip();
-////        if (textNew.equals("")) {
-////            textNew = "";
-////        }
-//        String[] textForGetLemmas = newtext.split("\\s+");
-//        LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
-//        List<String> wordBaseForms = new ArrayList<>();
-//        for (String word : textForGetLemmas) {
-//            if (checkWordByServiceForm(word, luceneMorphology)) {
-//                continue;
-//            } else {
-//                wordBaseForms.add(luceneMorphology.getNormalForms(word.toLowerCase()).get(0));
-//            }
-//        }
-////        wordBaseForms.forEach(s -> {
-////            if (lemmasMap.containsKey(s)) {
-////                lemmasMap.put(s, lemmasMap.get(s) + 1);
-////            } else {
-////                lemmasMap.put(s, 1);
-////            }
-////        });
-//        return lemmasMap;
-//    }
+    private void createIndexAndAddHimInRepository (Lemma lemma, float rank){
+        Index newIndex = new Index();
+        newIndex.setPageId(page);
+        newIndex.setLemmaId(lemma);
+        newIndex.setRank(rank);
+        indexingService.getIndexLemmaRepository().save(newIndex);
+    }
+}

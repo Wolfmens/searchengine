@@ -5,6 +5,7 @@ import searchengine.model.Site;
 import searchengine.model.Type;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 
 public class BypassAndAddSitesAndPagesToRepositoryThread extends Thread {
@@ -47,7 +48,12 @@ public class BypassAndAddSitesAndPagesToRepositoryThread extends Thread {
         } else {
             site.setStatus(Type.INDEXED);
             site.setStatusTime(LocalDateTime.now());
-//            indexingService.setStatusIndex(false);   что бы заново потом можно было индексировать после индексации
+            List<Site> siteList = indexingService.getSitesRepository().findAll();
+            siteList.forEach(s -> {
+                if (s.getStatus() == Type.INDEXED){
+                    indexingService.setStatusIndex(false);
+                }
+            });
         }
     }
 }

@@ -45,14 +45,6 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private boolean deleteDataBySite() {
-        List<Site> siteList = sitesRepository.findAll();
-//        siteList.forEach(s -> {
-//            pageRepository.findAll().forEach(p -> {
-//                indexLemmaRepository.deleteByPageId(p);
-//            });
-//            pageRepository.deleteBySiteId(s);
-//            lemmaRepository.deleteBySiteId(s);
-//        });
         indexLemmaRepository.deleteAll();
         lemmaRepository.deleteAll();
         pageRepository.deleteAll();
@@ -72,7 +64,6 @@ public class IndexingServiceImpl implements IndexingService {
     public boolean stopIndex() {
         if (isStatusIndex) {
             setStatusIndex(false);
-//            threads.forEach(Thread::interrupt); проверить +++++++++++++++
             threads.clear();
             return true;
         }

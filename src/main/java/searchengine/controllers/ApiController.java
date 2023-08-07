@@ -4,13 +4,17 @@ import org.hibernate.annotations.Parameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import searchengine.config.Site;
+import searchengine.config.SitesList;
 import searchengine.dto.search.SearchResponse;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.services.IndexingService;
 import searchengine.services.SearchService;
 import searchengine.services.StatisticsService;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 @RestController
@@ -93,11 +97,10 @@ public class ApiController {
     }
 
     @GetMapping(value = "/search", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Object> search (@RequestParam String query,
-                                                  @RequestParam String site,
+    public ResponseEntity<Object> search (@RequestParam(required = false) String query,
+                                                  @RequestParam(required = false) String site,
                                                   @RequestParam Integer offset,
                                                   @RequestParam Integer limit){
-
         return ResponseEntity.ok().body(searchService.getSearchResponse(query, site, offset, limit));
     }
 

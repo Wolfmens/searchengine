@@ -1,5 +1,6 @@
 package searchengine.services;
 
+import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -50,13 +51,8 @@ public class BypassSites extends RecursiveTask<Boolean> {
                 indexingService.addPathToList(url);
                 for (Element element : elements) {
                     String urlOfElement = element.attr("abs:href");
-                    boolean hasHeadURL = urlOfElement.matches(nodeWebsite.getSite().getUrl() + "/.+");
-                    boolean hasNotURLByElementsWebsite = urlOfElement.matches(nodeWebsite.getSite().getUrl() + ".*#.*");
-
-                    if (urlOfElement.matches("http.*") && hasHeadURL) {
-                        if (nodeWebsite.getLinks().contains(urlOfElement)
-                                || indexingService.getPathList().contains(urlOfElement)
-                                || hasNotURLByElementsWebsite) {
+                    if (hasHttpProtocolUrlAndHeadURL(urlOfElement)) {
+                        if (hasLinksInRootNodeAndPathInGeneralListAndNotURLByElementsWebsite (urlOfElement)) {
                             continue;
                         }
                         if (!indexingService.isStatusIndex()) {
@@ -72,14 +68,32 @@ public class BypassSites extends RecursiveTask<Boolean> {
                 }
         } catch (Error er){
             Site site = nodeWebsite.getSite();
-            site.setStatus(Type.FAILED);
-            site.setLastError(er.getMessage());
-            indexingService.getSitesRepository().save(site);
+            String error = er.getMessage();
+            settingErrorStatusBySiteInRepository(site,error);
         } catch (Exception ex){
-            ex.printStackTrace();
-//            System.err.println(ex.getClass() + " --- " + ex.getMessage());
+            System.err.println(ex.getClass() + " --- " + ex.getMessage());
         }
         return indexingService.isStatusIndex();
+    }
+
+    private void settingErrorStatusBySiteInRepository (Site site, String error){
+        site.setStatus(Type.FAILED);
+        site.setLastError(error);
+        indexingService.getSitesRepository().save(site);
+    }
+
+    private boolean hasLinksInRootNodeAndPathInGeneralListAndNotURLByElementsWebsite (String url) {
+        boolean hasNotURLByElementsWebsite = url.matches(nodeWebsite.getSite().getUrl() + ".*#.*");
+        boolean hasLinksInRootNode = nodeWebsite.getLinks().contains(url);
+        boolean hasPathInGeneralList = indexingService.getPathList().contains(url);
+
+        return hasLinksInRootNode || hasPathInGeneralList || hasNotURLByElementsWebsite;
+    }
+
+    private boolean hasHttpProtocolUrlAndHeadURL (String url) {
+        boolean hasHeadURL = url.matches(nodeWebsite.getSite().getUrl() + "/.+");
+        boolean hasHttpProtocolUrl = url.matches("http.*");
+        return hasHttpProtocolUrl && hasHeadURL;
     }
 
     private boolean isStatusCodeGood(Page page){
@@ -93,7 +107,6 @@ public class BypassSites extends RecursiveTask<Boolean> {
         page.setPath(url);
         page.setSiteId(nodeWebsite.getSite());
         page.setCode(statusCode);
-//        transformationWebHtmlInLemmas(doc, page);
     }
 
     private void addPageToRepositoryIfBypassStop(String url) throws Exception {
@@ -129,5 +142,4 @@ public class BypassSites extends RecursiveTask<Boolean> {
             ReturnLemmas returnLemmas = new ReturnLemmas(indexingService, nodeWebsite.getSite(), page);
             returnLemmas.getLemmas(doc.toString());
     }
-
 }
