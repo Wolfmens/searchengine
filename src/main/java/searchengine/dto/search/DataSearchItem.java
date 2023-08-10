@@ -1,8 +1,11 @@
 package searchengine.dto.search;
 
-import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 
-@Data
+@Getter
+@AllArgsConstructor
 public class DataSearchItem {
 
     private String site;

@@ -25,11 +25,19 @@ public class SearchServiceImpl implements SearchService {
     private final String[] SERVICE_FORMS = {"ПРЕДЛ", "СОЮЗ", "МЕЖД"};
     private List<String> listLemmas;
     private final float COEFF_FREQUENCY_LEMMA_ON_PAGES = 0.8F;
+    private final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.#####");
+    private List<Page> pageList = new ArrayList<>();
+    private SearchResponse searchResponse = new SearchResponse();
+    private final LuceneMorphology luceneMorphology;
 
     @Override
     public Object getSearchResponse(String query, String site, Integer offset, Integer limit) {
         if (query.isEmpty()) {
-            return getResponseIfError("Задан пустой поисковый запрос");
+            SearchResponse searchResponseEmpty = new SearchResponse();
+            searchResponseEmpty.setCount(0);
+            searchResponseEmpty.setResult(true);
+            searchResponseEmpty.setData(new ArrayList<>());
+            return searchResponseEmpty;
         }
         if (offset == null) {
             offset = 0;
@@ -39,32 +47,37 @@ public class SearchServiceImpl implements SearchService {
         }
         listLemmas = getFilteredAndSortedListWithLemmas(query, site);
         if (listLemmas.isEmpty()) {
-            return getResponseIfError("Страниц с данным словом не найдено");
+            SearchResponse searchResponseEmpty = new SearchResponse();
+            searchResponseEmpty.setCount(0);
+            searchResponseEmpty.setResult(true);
+            searchResponseEmpty.setData(new ArrayList<>());
+            return searchResponseEmpty;
         }
-        List<Page> pageList = new ArrayList<>();
+
         if (site == null) {
             for (Site siteFromRepository : indexingService.getSitesRepository().findAll()) {
-                List<String> listLemmasFilter = listLemmas.stream().filter(l -> indexingService.getLemmaRepository()
+                List<String> listLemmasFilter = listLemmas.stream()
+                                .filter(l -> indexingService.getLemmaRepository()
                                 .findByLemma(l).get(0).getSiteId().getId() == siteFromRepository.getId())
                                 .toList();
-                pageList.addAll(getFilterPageList(siteFromRepository.getUrl(), listLemmasFilter));
+                if(!listLemmasFilter.isEmpty()){
+                    pageList.addAll(getFilterPageList(siteFromRepository.getUrl(), listLemmasFilter));
+                }
             }
         } else {
             pageList.addAll(getFilterPageList(site, listLemmas));
         }
-        HashMap<Page, Double> mapPageByOtnRelevance = getMapPageByOtnRelevance(pageList);
 
-        SearchResponse searchResponse = new SearchResponse();
-        List<DataSearchItem> listData = getListObjectsBySearch(mapPageByOtnRelevance, listLemmas, query, limit, offset);
-
+        HashMap<Page, Double> mapPageByOtnRelevance = getMapPageByOtnRelevance(pageList,limit,offset);
+        List<DataSearchItem> listData = getListObjectsBySearch(mapPageByOtnRelevance, listLemmas, query);
         searchResponse.setResult(true);
         searchResponse.setData(listData);
-        searchResponse.setCount(mapPageByOtnRelevance.size());
+        searchResponse.setCount(listData.size());
 
         return searchResponse;
     }
 
-    private HashMap<Page, Double> getMapPageByOtnRelevance(List<Page> pageList) {
+    private HashMap<Page, Double> getMapPageByOtnRelevance(List<Page> pageList, int limit, int offset) {
         HashMap<Page, Integer> mapPageByAbsRelevance = new HashMap<>();
         HashMap<Page, Double> mapPageByOtnRelevance = new HashMap<>();
         for (Page page : pageList) {
@@ -87,7 +100,11 @@ public class SearchServiceImpl implements SearchService {
             double otnRel = (double) entry.getValue() / maxAbsRelevance;
             mapPageByOtnRelevance.put(entry.getKey(), otnRel);
         }
-        return mapPageByOtnRelevance;
+        return mapPageByOtnRelevance.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
+                .skip(offset)
+                .limit(limit)
+                .collect(LinkedHashMap::new, (m, c) -> m.put(c.getKey(), c.getValue()), LinkedHashMap::putAll);
     }
 
     private List<Page> getFilterPageList(String site, List<String> listLemmas) {
@@ -100,6 +117,9 @@ public class SearchServiceImpl implements SearchService {
                 .filter(i -> i.getPageId().getSiteId().getId() == siteFromRepository.getId())
                 .map(Index::getPageId)
                 .toList();
+        if (pageList.isEmpty()) {
+            return pageList;
+        }
         Iterator<Page> iterator = pageList.iterator();
 
         for (int i = 1; i < listLemmas.size(); i++) {
@@ -107,17 +127,14 @@ public class SearchServiceImpl implements SearchService {
             if (lemma.getSiteId().getId() != siteFromRepository.getId()) {
                 continue;
             }
-            if (pageList.isEmpty()) {
-                return pageList;
-            }
             List<Index> listOfIndexesFromRepositoryByLemma = indexingService
                     .getIndexLemmaRepository()
                     .findAllByLemmaId(lemma);
             while (iterator.hasNext()) {
                 Page page = iterator.next();
-
                 Optional<Index> optional =
-                        listOfIndexesFromRepositoryByLemma.stream().filter(in -> in.getPageId().getId() == page.getId())
+                        listOfIndexesFromRepositoryByLemma.stream()
+                                .filter(in -> in.getPageId().getId() == page.getId())
                                 .findAny();
                 if (!optional.isPresent() && !optional.isEmpty()) {
                     iterator.remove();
@@ -139,19 +156,18 @@ public class SearchServiceImpl implements SearchService {
         StringBuilder finalSnippet = new StringBuilder();
         HashSet<String> setSnippets = new HashSet<>();
         try {
-            LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
-            Document document = Jsoup.connect(path).get();
-            String text = document.toString();
+            String text = indexingService.getPageRepository().findByPath(path).get().getContent();
             for (String word : queryElements) {
                 String lemmaFromQuery = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
-                if (lemma.contains(lemmaFromQuery)) {
-                    Pattern pattern = Pattern.compile("[А-Яа-я\\s]*\\s*" + word + "\\s*[А-Яа-я\\s]*");
-                    Matcher matcher = pattern.matcher(text);
-                    while (matcher.find()) {
-                        String initialSnippet = matcher.group();
-                        String highlightedWordFromQuery = "<b>" + word + "</b>";
-                        setSnippets.add(initialSnippet.replace(word, highlightedWordFromQuery).strip() + "...");
-                    }
+                if (!lemma.contains(lemmaFromQuery)) {
+                   continue;
+                }
+                Pattern pattern = Pattern.compile("[А-Яа-я\\s]*\\s*" + word + "\\s*[А-Яа-я\\s]*");
+                Matcher matcher = pattern.matcher(text);
+                while (matcher.find()) {
+                    String initialSnippet = matcher.group();
+                    String highlightedWordFromQuery = "<b>" + word + "</b>";
+                    setSnippets.add(initialSnippet.replace(word, highlightedWordFromQuery).strip() + "...");
                 }
             }
             for (String word : setSnippets) {
@@ -166,51 +182,37 @@ public class SearchServiceImpl implements SearchService {
         return finalSnippet.toString();
     }
 
-    private List<DataSearchItem> getListObjectsBySearch(Map<Page, Double> map,
-                                                        List<String> lemmas,
-                                                        String query,
-                                                        int limit,
-                                                        int offset) {
-        DecimalFormat decimalFormat = new DecimalFormat("#.#####");
-        Map<Page, Double> sortedMap = map.entrySet().stream()
-                .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
-                .skip(offset)
-                .limit(limit)
-                .collect(LinkedHashMap::new, (m, c) -> m.put(c.getKey(), c.getValue()), LinkedHashMap::putAll);
+    private List<DataSearchItem> getListObjectsBySearch(Map<Page, Double> map, List<String> lemmas, String query) {
         List<DataSearchItem> list = new ArrayList<>();
 
-        for (Map.Entry<Page, Double> entry : sortedMap.entrySet()) {
+        for (Map.Entry<Page, Double> entry : map.entrySet()) {
             Page page = entry.getKey();
-            Site site = page.getSiteId();
-            String a = decimalFormat.format(entry.getValue()).replace(",", ".");
-            double otnRel = Double.parseDouble(a);
-            DataSearchItem dataSearchItem = new DataSearchItem();
-            dataSearchItem.setRelevance(otnRel);
-            dataSearchItem.setSiteName(site.getName());
-            dataSearchItem.setSite(site.getUrl());
-
-            if (page.getPath().equals(site.getUrl())) {
-                dataSearchItem.setUri("/");
-            } else {
-                String uri = getSiteUri(page.getPath());
-                dataSearchItem.setUri(uri);
+            StringBuilder builder = new StringBuilder();
+            for (String lemma : lemmas) {
+                builder.append(creationSnippet(page.getPath(), lemma, query));
+                builder.append("\n");
             }
+            if (builder.toString().isBlank()){
+                continue;
+            }
+            Site site = page.getSiteId();
+            String replaceSign = DECIMAL_FORMAT.format(entry.getValue()).replace(",", ".");
+            double otnRel = Double.parseDouble(replaceSign);
+            String uri = getUri(page.getPath(),site.getUrl());
             try {
                 Document document = Jsoup.connect(page.getPath()).get();
                 String title = document.title();
-                dataSearchItem.setTitle(title);
-                StringBuilder builder = new StringBuilder();
-                for (String lemma : lemmas) {
-                    builder.append(creationSnippet(page.getPath(), lemma, query));
-                    builder.append("\n");
-                }
-                dataSearchItem.setSnippet(builder.toString());
+                String snippet = builder.toString().strip();
+                list.add(new DataSearchItem(site.getUrl(),site.getName(),uri,title,snippet,otnRel));
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            list.add(dataSearchItem);
         }
         return list;
+    }
+
+    private String getUri (String path, String siteUrl){
+        return path.equals(siteUrl) ? "/" : getSiteUri(path);
     }
 
     private String getSiteUri(String uri) {
