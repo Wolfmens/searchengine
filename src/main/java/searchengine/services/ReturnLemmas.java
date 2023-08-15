@@ -22,11 +22,8 @@ public class ReturnLemmas {
 
 
     public void getLemmas(String text) throws Exception {
-        String textNew = getStringsOfURL(text);
-        String regex = "[^а-яА-Я\\s]";
-        String newtext = textNew.toLowerCase().replaceAll(regex, " ").strip();
-        String[] textForGetLemmas = newtext.split("\\s+");
         LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
+        String[] textForGetLemmas = getMassiveElementsFromContent(text);
         List<String> wordBaseForms = new ArrayList<>();
         for (String word : textForGetLemmas) {
             if (!checkWordByServiceForm(word, luceneMorphology)) {
@@ -90,11 +87,8 @@ public class ReturnLemmas {
     }
 
     public void updateLemmas(String content) throws Exception {
-        String textNew = getStringsOfURL(content);
-        String regex = "[^а-яА-Я\\s]";
-        String newtext = textNew.toLowerCase().replaceAll(regex, " ").strip();
-        String[] textForGetLemmas = newtext.split("\\s+");
         LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
+        String[] textForGetLemmas = getMassiveElementsFromContent(content);
         for (String word : textForGetLemmas) {
             if (!checkWordByServiceForm(word, luceneMorphology)) {
                 String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
@@ -122,6 +116,13 @@ public class ReturnLemmas {
                 createIndexAndAddHimInRepository(lemmaFromRepository,entry.getValue());
             }
         }
+    }
+
+    private String[] getMassiveElementsFromContent(String content) throws Exception {
+        String textNew = getStringsOfURL(content);
+        String regex = "[^а-яА-Я\\s]";
+        String newtext = textNew.toLowerCase().replaceAll(regex, " ").strip();
+        return newtext.split("\\s+");
     }
 
     private void createIndexAndAddHimInRepository (Lemma lemma, float rank){

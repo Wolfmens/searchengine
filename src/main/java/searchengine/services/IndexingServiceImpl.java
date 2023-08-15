@@ -10,10 +10,7 @@ import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.config.SitesList;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +21,8 @@ public class IndexingServiceImpl implements IndexingService {
     private HashSet<String> pathList = new HashSet<>();
     private volatile boolean isStatusIndex;
     private final SerenaSearchBot serenaSearchBot;
+    private HashMap<String, Integer> countPagesBySite = new HashMap<>();
+    private final String[] TYPES = {".png", ".jpeg", ".jpg", ".pdf"};
 
     @Autowired
     private SitesRepository sitesRepository;
@@ -33,7 +32,6 @@ public class IndexingServiceImpl implements IndexingService {
     private LemmaRepository lemmaRepository;
     @Autowired
     private IndexLemmaRepository indexLemmaRepository;
-
 
     @Override
     public boolean indexing() {
@@ -49,7 +47,7 @@ public class IndexingServiceImpl implements IndexingService {
         lemmaRepository.deleteAll();
         pageRepository.deleteAll();
         sitesRepository.deleteAll();
-        return pageRepository.findAll().size() == 0 && sitesRepository.findAll().size() == 0;
+        return pageRepository.findAll().isEmpty() && sitesRepository.findAll().isEmpty();
     }
 
     private void setSitesAndPagesToRepository() {
@@ -65,6 +63,7 @@ public class IndexingServiceImpl implements IndexingService {
         if (isStatusIndex) {
             setStatusIndex(false);
             threads.clear();
+            fillingMapCountPages();
             return true;
         }
         return false;
@@ -86,7 +85,7 @@ public class IndexingServiceImpl implements IndexingService {
                 return false;
             }
         } catch (Exception ex) {
-            ex.printStackTrace();
+            System.err.println(ex.getClass() + "---" + ex.getMessage());
         }
         return false;
     }
@@ -116,9 +115,10 @@ public class IndexingServiceImpl implements IndexingService {
                 pageRepository.save(page);
                 ReturnLemmas returnLemmas = new ReturnLemmas(this, site, page);
                 returnLemmas.getLemmas(content);
+                fillingMapCountPages();
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println(e.getClass() + "---" + e.getMessage());
         }
     }
 
@@ -129,6 +129,25 @@ public class IndexingServiceImpl implements IndexingService {
             }
         }
         return false;
+    }
+
+    @Override
+    public HashMap<String, Integer> getCountPagesBySite() {
+        if (countPagesBySite.isEmpty()) {
+            fillingMapCountPages();
+        } else {
+            return countPagesBySite;
+        }
+        return countPagesBySite;
+    }
+
+    public void fillingMapCountPages() {
+        countPagesBySite.clear();
+        List<Site> siteList = sitesRepository.findAll();
+        siteList.forEach(s -> {
+            int count = pageRepository.findAllBySiteId(s).size();
+            countPagesBySite.put(s.getUrl(), count);
+        });
     }
 
     private boolean isConnectUrl(int statusCode) {
@@ -174,6 +193,16 @@ public class IndexingServiceImpl implements IndexingService {
     @Override
     public IndexLemmaRepository getIndexLemmaRepository() {
         return indexLemmaRepository;
+    }
+
+    @Override
+    public String[] getTypes() {
+        return TYPES;
+    }
+
+    @Override
+    public void fillingMapCountPages(String urlSite, int countPages) {
+        countPagesBySite.put(urlSite,countPages);
     }
 }
 

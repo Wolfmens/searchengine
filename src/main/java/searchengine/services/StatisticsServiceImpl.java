@@ -12,6 +12,7 @@ import searchengine.dto.statistics.TotalStatistics;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 
 @Service
@@ -31,33 +32,60 @@ public class StatisticsServiceImpl implements StatisticsService {
         List<Site> sitesList = sites.getSites();
         for(int i = 0; i < sitesList.size(); i++) {
             Site site = sitesList.get(i);
-            DetailedStatisticsItem item = new DetailedStatisticsItem();
-            item.setName(site.getName());
-            item.setUrl(site.getUrl());
-            int pages = (int) indexingService.getPageRepository().count();
-            int lemmas = (int) indexingService.getLemmaRepository().count();
-            item.setPages(pages);
-            item.setLemmas(lemmas);
             searchengine.model.Site siteFromRepository = indexingService.getSitesRepository()
-                                                         .findByUrl(site.getUrl())
-                                                         .get();
-            String statusSite = siteFromRepository.getStatus().name();
-            item.setStatus(statusSite);
-            String error = siteFromRepository.getLastError();
-            item.setError(error);
-            item.setStatusTime(Timestamp.valueOf(siteFromRepository.getStatusTime()).getTime());
+                    .findByUrl(site.getUrl())
+                    .get();
+            int pages = indexingService.getPageRepository().findAllBySiteId(siteFromRepository).size();
+            int lemmas = indexingService.getLemmaRepository().findAllBySiteId(siteFromRepository).size();
             total.setPages(total.getPages() + pages);
             total.setLemmas(total.getLemmas() + lemmas);
-            detailed.add(item);
+            detailed.add(getDetailedStatisticsItem(siteFromRepository,pages,lemmas));
+            indexingService.fillingMapCountPages(site.getUrl(),pages);
         }
+        changeIndexingStatus(detailed);
+
+        return getStatisticsResponse(getStatisticsData(detailed,total),true);
+    }
+
+    private DetailedStatisticsItem getDetailedStatisticsItem (searchengine.model.Site site, int pages, int lemmas) {
+        DetailedStatisticsItem item = new DetailedStatisticsItem();
+        item.setName(site.getName());
+        item.setUrl(site.getUrl());
+        item.setPages(pages);
+        item.setLemmas(lemmas);
+        item.setStatus(site.getStatus().name());
+        item.setError(site.getLastError());
+        item.setStatusTime(Timestamp.valueOf(site.getStatusTime()).getTime());
+
+        return item;
+    }
+
+
+    private void changeIndexingStatus (List<DetailedStatisticsItem> detailed) {
+        Optional<DetailedStatisticsItem> optional = detailed.stream()
+                                                                    .filter(d -> d.getStatus().equals("INDEXING"))
+                                                                    .findAny();
+        if (!optional.isPresent()){
+            indexingService.setStatusIndex(false);
+        }
+    }
+
+    private StatisticsResponse getStatisticsResponse (StatisticsData data, boolean result) {
         StatisticsResponse response = new StatisticsResponse();
+        response.setStatistics(data);
+        response.setResult(result);
+        return response;
+    }
+
+    private StatisticsData getStatisticsData (List<DetailedStatisticsItem> detailed, TotalStatistics total) {
         StatisticsData data = new StatisticsData();
+        if (detailed.isEmpty()){
+            data.setDetailed(new ArrayList<>());
+        }
         data.setDetailed(detailed);
         data.setTotal(total);
 
-        response.setStatistics(data);
-        response.setResult(true);
-
-        return response;
+        return data;
     }
+
 }

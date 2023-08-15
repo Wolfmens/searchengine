@@ -17,16 +17,17 @@ spring:
 
 indexing-settings:
   sites:
-    - url: https://lenta.ru
-      name: Лента.ру
+#    - url: https://lenta.ru
+#      name: Лента.ру
     - url: https://ipfran.ru
       name: ипфран.ру
 #    - url: https://skillbox.ru
 #      name: Skillbox
-    - url: https://www.playback.ru
-      name: PlayBack.Ru
-#    - url: https://www.svetlovka.ru
-#      name: светловка.ру
+#    - url: https://www.playback.ru
+#      name: PlayBack.Ru
+    - url: https://www.svetlovka.ru
+      name: светловка.ру
+
   user_agent: Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6
   referrer: http://www.google.com
 

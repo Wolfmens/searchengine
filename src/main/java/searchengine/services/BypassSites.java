@@ -35,48 +35,36 @@ public class BypassSites extends RecursiveTask<Boolean> {
         try {
             Thread.sleep(500);
             LinkedHashSet<BypassSites> subTask = new LinkedHashSet<>();
-            Document document = Jsoup.connect(url).timeout(200000)
-                    .userAgent(indexingService.getSerenaSearchBot().getUserAgent())
-                    .referrer(indexingService.getSerenaSearchBot().getReferrer())
-                    .get();
-            setFieldsOfPage(document,url, page);
-                Elements elements = document.select("a");
-                Optional<Page> optional = indexingService.getPageRepository().findByPath(url);
-                if (!optional.isPresent()) {
-                    saveToRepository(page);
-                    if (!isStatusCodeGood(page)) {
-                        transformationWebHtmlInLemmas(document, page);
+            Document document = getDocumentAndWorkWithRepositories(url,page);
+            if (isStatusCodeGood(page)){
+                return indexingService.isStatusIndex();
+            }
+            Elements elements = document.select("a");
+            for (Element element : elements) {
+                String urlOfElement = element.attr("abs:href");
+                if (hasHttpProtocolUrlAndHeadURL(urlOfElement)) {
+                    if (hasLinksInRootNodeAndPathInGeneralListAndNotURLByElementsWebsite(urlOfElement)) {
+                        continue;
+                    }
+                    if (!indexingService.isStatusIndex()) {
+                        addPageToRepositoryIfBypassStop(urlOfElement);
+                        System.err.println(urlOfElement + " - " + " завершено");
+                    } else {
+                        forkBypass(urlOfElement, subTask);
                     }
                 }
-                indexingService.addPathToList(url);
-                for (Element element : elements) {
-                    String urlOfElement = element.attr("abs:href");
-                    if (hasHttpProtocolUrlAndHeadURL(urlOfElement)) {
-                        if (hasLinksInRootNodeAndPathInGeneralListAndNotURLByElementsWebsite (urlOfElement)) {
-                            continue;
-                        }
-                        if (!indexingService.isStatusIndex()) {
-                            addPageToRepositoryIfBypassStop(urlOfElement);
-                            System.err.println(urlOfElement + " - " + " завершено");
-                        } else {
-                            forkBypass(urlOfElement, subTask);
-                        }
-                    }
-                }
-                for (BypassSites bypass : subTask) {
-                    bypass.join();
-                }
-        } catch (Error er){
-            Site site = nodeWebsite.getSite();
-            String error = er.getMessage();
-            settingErrorStatusBySiteInRepository(site,error);
-        } catch (Exception ex){
+            }
+            subTask.forEach(BypassSites::join);
+        } catch (Error er) {
+            settingErrorStatusBySiteInRepository(er.getMessage());
+        } catch (Exception ex) {
             System.err.println(ex.getClass() + " --- " + ex.getMessage());
         }
         return indexingService.isStatusIndex();
     }
 
-    private void settingErrorStatusBySiteInRepository (Site site, String error){
+    private void settingErrorStatusBySiteInRepository (String error){
+        Site site = nodeWebsite.getSite();
         site.setStatus(Type.FAILED);
         site.setLastError(error);
         indexingService.getSitesRepository().save(site);
@@ -87,7 +75,7 @@ public class BypassSites extends RecursiveTask<Boolean> {
         boolean hasLinksInRootNode = nodeWebsite.getLinks().contains(url);
         boolean hasPathInGeneralList = indexingService.getPathList().contains(url);
 
-        return hasLinksInRootNode || hasPathInGeneralList || hasNotURLByElementsWebsite;
+        return hasLinksInRootNode || hasPathInGeneralList || hasNotURLByElementsWebsite || hasUrlIsNotImage(url);
     }
 
     private boolean hasHttpProtocolUrlAndHeadURL (String url) {
@@ -101,7 +89,7 @@ public class BypassSites extends RecursiveTask<Boolean> {
         return statusCode.startsWith("4") || statusCode.startsWith("5");
     }
 
-    private void setFieldsOfPage(Document doc, String url, Page page) throws Exception {
+    private void setFieldsOfPage(Document doc, String url, Page page) {
         int statusCode = doc.connection().response().statusCode();
         page.setContent(doc.toString());
         page.setPath(url);
@@ -110,18 +98,37 @@ public class BypassSites extends RecursiveTask<Boolean> {
     }
 
     private void addPageToRepositoryIfBypassStop(String url) throws Exception {
-        Document document = Jsoup.connect(url).timeout(200000)
-                .userAgent(indexingService.getSerenaSearchBot().getUserAgent())
-                .referrer(indexingService.getSerenaSearchBot().getReferrer())
-                .get();
         Page page = new Page();
+        if (!hasUrlIsNotImage(url)) {
+            getDocumentAndWorkWithRepositories(url, page);
+        }
+    }
+
+    private Document getDocumentAndWorkWithRepositories (String url, Page page) throws Exception {
+        Connection connection = Jsoup.connect(url).timeout(200000)
+                .userAgent(indexingService.getSerenaSearchBot().getUserAgent())
+                .referrer(indexingService.getSerenaSearchBot().getReferrer()).ignoreHttpErrors(true);
+        Document document = connection.get();
         setFieldsOfPage(document, url, page);
         Optional<Page> optional = indexingService.getPageRepository().findByPath(url);
         if (!optional.isPresent()) {
-           saveToRepository(page);
-           transformationWebHtmlInLemmas(document, page);
+            saveToRepository(page);
+            if (!isStatusCodeGood(page)) {
+                transformationWebHtmlInLemmas(document, page);
+            }
         }
         indexingService.addPathToList(url);
+
+        return document;
+    }
+
+    private boolean hasUrlIsNotImage (String url) {
+        for (String type : indexingService.getTypes()){
+            if (url.contains(type)){
+                return true;
+            }
+        }
+        return false;
     }
 
     private void forkBypass (String url,  LinkedHashSet<BypassSites> subTask){
