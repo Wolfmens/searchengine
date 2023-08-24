@@ -1,10 +1,12 @@
-package searchengine.services;
+package searchengine.utils;
 
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import searchengine.model.NodeWebsite;
 import searchengine.model.Site;
 import searchengine.model.Type;
+import searchengine.repositories.SitesRepository;
+import searchengine.services.IndexingService;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.ForkJoinPool;

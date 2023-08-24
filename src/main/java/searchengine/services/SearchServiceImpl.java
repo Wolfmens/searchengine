@@ -22,7 +22,7 @@ public class SearchServiceImpl implements SearchService {
     private final String[] SERVICE_FORMS = {"ПРЕДЛ", "СОЮЗ", "МЕЖД"};
     private List<String> listLemmas;
     private final float COEFF_FREQUENCY_LEMMA_ON_PAGES = 0.8F;
-    private final int sizeSnippet = 180;
+    private final int SIZE_LIMIT_OF_SNIPPET = 180;
     private final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.#####");
     private List<Page> pageList = new ArrayList<>();
     private final LuceneMorphology luceneMorphology;
@@ -33,12 +33,9 @@ public class SearchServiceImpl implements SearchService {
         if (query.isEmpty()) {
             return getGeneratedResponse(true, new ArrayList<>(), 0);
         }
-        if (offset == null) {
-            offset = 0;
-        }
-        if (limit == null) {
-            limit = 20;
-        }
+        offset = getValueOffset(offset);
+        limit = getValueLimit(limit);
+
         mapOfCountPagesBySite = indexingService.getCountPagesBySite();
         listLemmas = getFilteredAndSortedListWithLemmas(query, site);
         if (listLemmas.isEmpty()) {
@@ -54,6 +51,20 @@ public class SearchServiceImpl implements SearchService {
         pageList.clear();
 
         return getGeneratedResponse(true, listDataByLimitAndOffset, listData.size());
+    }
+
+    private int getValueLimit(Integer limit) {
+        if (limit == null) {
+            return 20;
+        }
+        return limit;
+    }
+
+    private int getValueOffset(Integer offset) {
+        if (offset == null) {
+           return 0;
+        }
+        return offset;
     }
 
     private void fillPageList (String site){
@@ -149,73 +160,96 @@ public class SearchServiceImpl implements SearchService {
         return pageList;
     }
 
-    private String creationSnippet(String path, String lemma, String query) {
-        String[] queryElements = query.split(" ");
-        StringBuilder finalSnippet = new StringBuilder();
-        try {
-            String text = indexingService.getPageRepository().findByPath(path).get().getContent();
-            for (String word : queryElements) {
-                String lemmaFromQuery = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
-                if (!lemma.contains(lemmaFromQuery)) {
-                    continue;
-                }
-                String highlightedWordFromQuery = "<b>" + word + "</b>";
-                Pattern pattern = Pattern.compile("[А-Яа-я\\s]*\\s*" + word + "\\s*[А-Яа-я\\s]*");
-                Matcher matcher = pattern.matcher(text);
-                List<String> results = matcher.results()
-                        .map(r -> r.group().replace(word, highlightedWordFromQuery).strip())
-                        .toList();
-                for (String s : results) {
-                    if (finalSnippet.length() >= sizeSnippet) {
-                        break;
-                    } else {
-                        finalSnippet.append(s);
-                    }
-                }
-            }
-        } catch (Exception ex) {
-            System.err.println(ex.getMessage());
-        }
-        return finalSnippet.toString();
-    }
 
     private List<DataSearchItem> getListObjectsBySearch(Map<Page, Double> map, List<String> lemmas, String query) {
         List<DataSearchItem> list = new ArrayList<>();
+        String[] queryElements = query.split(" ");
         for (Map.Entry<Page, Double> entry : map.entrySet()) {
+            HashSet<String> setSentencesFromPage = new HashSet<>();
+            HashSet<String> setSentencesFromPageWithSecretions = new HashSet<>();
             Page page = entry.getKey();
+            Site site = page.getSiteId();
             StringBuilder builder = new StringBuilder();
-            for (String lemma : lemmas) {
-                builder.append(creationSnippet(page.getPath(), lemma, query));
-                builder.append("\n");
-            }
+
+            fillingSetSentences(queryElements,lemmas,page,setSentencesFromPage);
+            fillingSetSentencesWithSecretions(setSentencesFromPage,lemmas,queryElements,setSentencesFromPageWithSecretions);
+            fillingBuilderSnippet(setSentencesFromPageWithSecretions,builder);
+
             if (builder.toString().isBlank()) {
                 continue;
             }
-            Site site = page.getSiteId();
-            String replaceSign = DECIMAL_FORMAT.format(entry.getValue()).replace(",", ".");
-            double otnRel = Double.parseDouble(replaceSign);
+            double otnRel = getOntRelValue(entry.getValue());
             String uri = getUri(page.getPath(), site.getUrl());
-            try {
-                Document document = Jsoup.connect(page.getPath()).get();
-                list.add(new DataSearchItem(site.getUrl(), site.getName(), uri, document.title(), builder.toString().strip(), otnRel));
-            } catch (Exception e) {
-                System.err.println(e.getClass() + "---" + e.getMessage());
-            }
+            String htmlContent = indexingService.getPageRepository().findById(page.getId()).get().getContent();
+            Document document = Jsoup.parse(htmlContent);
+            list.add(new DataSearchItem(site.getUrl(),
+                    site.getName(),
+                    uri,
+                    document.title(),
+                    builder.toString().strip(),
+                    otnRel));
         }
         return list;
     }
 
-    private String getUri(String path, String siteUrl) {
-        return path.equals(siteUrl) ? "/" : getSiteUri(path);
+    private double getOntRelValue(double oldValue) {
+        String replaceSign = DECIMAL_FORMAT.format(oldValue).replace(",", ".");
+        return Double.parseDouble(replaceSign);
     }
 
-    private String getSiteUri(String uri) {
-        String[] uriElements = uri.split("/");
-        String siteUrl = "";
-        for (int i = 3; i < uriElements.length; i++) {
-            siteUrl = siteUrl.concat("/" + uriElements[i]);
+    private void fillingSetSentences(String[] elements,
+                                     List<String> lemmas,
+                                     Page page,
+                                     HashSet<String> set) {
+        for (String queryWord : elements) {
+            String lemmaFromQuery = luceneMorphology.getNormalForms(queryWord.toLowerCase()).get(0).strip();
+            if (!lemmas.contains(lemmaFromQuery)) {
+                continue;
+            }
+            HashMap<String, Set<String>> mapWordsAndSentencesWithThem
+                    = indexingService.getMap().get(page.getId());
+            Set<String> setSentencesByPageFromBase = mapWordsAndSentencesWithThem.get(queryWord);
+            if (setSentencesByPageFromBase == null) {
+                continue;
+            }
+            set.addAll(setSentencesByPageFromBase);
         }
-        return siteUrl;
+    }
+
+    private void fillingSetSentencesWithSecretions(HashSet<String> setBeforeChange,
+                                                   List<String> lemmas,
+                                                   String[] elements,
+                                                   HashSet<String> setAfterChange) {
+        for (String sentence : setBeforeChange) {
+            String wordChanged = sentence;
+            for (String wordFromQuery : elements) {
+                String lemmaFromQuery = luceneMorphology.getNormalForms(wordFromQuery.toLowerCase()).get(0).strip();
+                if (!sentence.contains(wordFromQuery)) {
+                    continue;
+                }
+                if (!lemmas.contains(lemmaFromQuery)) {
+                    continue;
+                }
+                wordChanged = wordChanged.replace(wordFromQuery, "<b>" + wordFromQuery + "</b>");
+            }
+            setAfterChange.add(wordChanged);
+        }
+    }
+
+    private void fillingBuilderSnippet(HashSet<String> set, StringBuilder builder) {
+        for (String sentence : set){
+            if (builder.length() <= SIZE_LIMIT_OF_SNIPPET){
+                builder.append(sentence).append("...");
+            }
+        }
+    }
+
+    private String getUri(String path, String siteUrl) {
+        return path.equals(siteUrl) ? "/" : getSiteUri(path, siteUrl);
+    }
+
+    private String getSiteUri(String path, String site) {
+        return path.replace(site,"");
     }
 
     private List<String> getListOfLemmasFromQuery(String query) {

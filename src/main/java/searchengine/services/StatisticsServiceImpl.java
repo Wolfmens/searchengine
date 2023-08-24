@@ -10,6 +10,7 @@ import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
 
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -32,22 +33,28 @@ public class StatisticsServiceImpl implements StatisticsService {
         List<Site> sitesList = sites.getSites();
         for(int i = 0; i < sitesList.size(); i++) {
             Site site = sitesList.get(i);
-            searchengine.model.Site siteFromRepository = indexingService.getSitesRepository()
-                    .findByUrl(site.getUrl())
-                    .get();
-            int pages = indexingService.getPageRepository().findAllBySiteId(siteFromRepository).size();
-            int lemmas = indexingService.getLemmaRepository().findAllBySiteId(siteFromRepository).size();
-            total.setPages(total.getPages() + pages);
-            total.setLemmas(total.getLemmas() + lemmas);
-            detailed.add(getDetailedStatisticsItem(siteFromRepository,pages,lemmas));
-            indexingService.fillingMapCountPages(site.getUrl(),pages);
+            Optional<searchengine.model.Site> isSiteExistInRepository = indexingService.getSitesRepository()
+                    .findByUrl(site.getUrl());
+            if (isSiteExistInRepository.isPresent()){
+                searchengine.model.Site siteFromRepository = isSiteExistInRepository.get();
+                int pages = indexingService.getPageRepository().findAllBySiteId(siteFromRepository).size();
+                int lemmas = indexingService.getLemmaRepository().findAllBySiteId(siteFromRepository).size();
+                total.setPages(total.getPages() + pages);
+                total.setLemmas(total.getLemmas() + lemmas);
+                detailed.add(getDetailedStatisticsItemIfSiteExist(siteFromRepository,pages,lemmas));
+                indexingService.fillingMapCountPages(site.getUrl(),pages);
+            } else {
+                detailed.add(getDetailedStatisticsItemIfSiteNotExist(site));
+            }
         }
         changeIndexingStatus(detailed);
 
         return getStatisticsResponse(getStatisticsData(detailed,total),true);
     }
 
-    private DetailedStatisticsItem getDetailedStatisticsItem (searchengine.model.Site site, int pages, int lemmas) {
+    private DetailedStatisticsItem getDetailedStatisticsItemIfSiteExist(searchengine.model.Site site,
+                                                                        int pages,
+                                                                        int lemmas) {
         DetailedStatisticsItem item = new DetailedStatisticsItem();
         item.setName(site.getName());
         item.setUrl(site.getUrl());
@@ -56,6 +63,19 @@ public class StatisticsServiceImpl implements StatisticsService {
         item.setStatus(site.getStatus().name());
         item.setError(site.getLastError());
         item.setStatusTime(Timestamp.valueOf(site.getStatusTime()).getTime());
+
+        return item;
+    }
+
+    private DetailedStatisticsItem getDetailedStatisticsItemIfSiteNotExist(Site site) {
+        DetailedStatisticsItem item = new DetailedStatisticsItem();
+        item.setName(site.getName());
+        item.setUrl(site.getUrl());
+        item.setPages(0);
+        item.setLemmas(0);
+        item.setStatus("FAILED");
+        item.setError("Не проиндексирован");
+        item.setStatusTime(Timestamp.valueOf(LocalDateTime.now()).getTime());
 
         return item;
     }

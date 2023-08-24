@@ -1,4 +1,4 @@
-package searchengine.services;
+package searchengine.utils;
 
 import lombok.RequiredArgsConstructor;
 import org.apache.lucene.morphology.LuceneMorphology;
@@ -7,9 +7,13 @@ import searchengine.model.Index;
 import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.Site;
+import searchengine.services.IndexingService;
 
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class ReturnLemmas {
@@ -30,12 +34,28 @@ public class ReturnLemmas {
                 String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
                 if (!wordBaseForms.contains(wordBaseForm)) {
                     addLemmaToRepository(wordBaseForm);
+                    getFindWordsInPage(text,word);
                 }
                 wordBaseForms.add(wordBaseForm);
                 addLemmaToMap(wordBaseForm);
             }
         }
         addIndexToRepository();
+    }
+
+    private void getFindWordsInPage (String text, String word){
+        Pattern pattern = Pattern.compile("[А-Яа-я\\s]*\\s*" + word + "\\s*[А-Яа-я\\s]*");
+        Matcher matcher = pattern.matcher(text);
+        Set<String> results = matcher.results()
+                .map(r -> r.group().strip())
+                .collect(Collectors.toSet());
+        HashMap<String,Set<String>> mapWordAndFindInText = new HashMap<>(){{put(word,results);}};
+        if (indexingService.getMap().containsKey(page.getId())){
+            mapWordAndFindInText.putAll(indexingService.getMap().get(page.getId()));
+            indexingService.fillingMap(page.getId(), mapWordAndFindInText);
+        } else {
+            indexingService.fillingMap(page.getId(), mapWordAndFindInText);
+        }
     }
 
     private void addIndexToRepository() {

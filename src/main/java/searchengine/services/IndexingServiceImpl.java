@@ -4,13 +4,22 @@ import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import searchengine.config.SerenaSearchBot;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.config.SitesList;
+import searchengine.repositories.IndexLemmaRepository;
+import searchengine.repositories.LemmaRepository;
+import searchengine.repositories.PageRepository;
+import searchengine.repositories.SitesRepository;
+import searchengine.utils.BypassAndAddSitesAndPagesToRepositoryThread;
+import searchengine.utils.ReturnLemmas;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +32,7 @@ public class IndexingServiceImpl implements IndexingService {
     private final SerenaSearchBot serenaSearchBot;
     private HashMap<String, Integer> countPagesBySite = new HashMap<>();
     private final String[] TYPES = {".png", ".jpeg", ".jpg", ".pdf"};
+    private ConcurrentHashMap<Integer,HashMap<String,Set<String>>> map = new ConcurrentHashMap<>();
 
     @Autowired
     private SitesRepository sitesRepository;
@@ -34,12 +44,20 @@ public class IndexingServiceImpl implements IndexingService {
     private IndexLemmaRepository indexLemmaRepository;
 
     @Override
-    public boolean indexing() {
-        if (deleteDataBySite()) {
-            setSitesAndPagesToRepository();
-            return true;
+    public HashMap<Object,Object> indexing() {
+        if (!isStatusIndex){
+            setStatusIndex(true);
+            if (deleteDataBySite()) {
+                setSitesAndPagesToRepository();
+                return new HashMap<>() {{
+                    put("result", true);
+                }};
+            }
         }
-        return false;
+        return new HashMap<>() {{
+            put("result", false);
+            put("error", "Индексация уже запущена");
+        }};
     }
 
     private boolean deleteDataBySite() {
@@ -59,20 +77,29 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     @Override
-    public boolean stopIndex() {
+    public HashMap<Object,Object> stopIndex() {
         if (isStatusIndex) {
             setStatusIndex(false);
             threads.clear();
             fillingMapCountPages();
-            return true;
+
+            return new HashMap<>() {{
+                put("result", true);
+            }};
         }
-        return false;
+        return new HashMap<>() {{
+            put("result", false);
+            put("error", "Индексация не запущена");
+        }};
     }
 
     @Override
-    public boolean action(String url) {
+    public HashMap<Object,Object> action(String url) {
         if (url.isBlank()) {
-            return false;
+            return new HashMap<>() {{
+                put("result", false);
+                put("error", "Ваш запрос пустой");
+            }};
         }
         try {
             Document document = Jsoup.connect(url).get();
@@ -80,14 +107,21 @@ public class IndexingServiceImpl implements IndexingService {
             int statusCode = document.connection().response().statusCode();
             if (hasSite(url) && isConnectUrl(statusCode)) {
                 addOrUpdatePageToRepository(url, statusCode, content);
-                return true;
+                return new HashMap<>() {{put("result", true);}};
             } else {
-                return false;
+                return new HashMap<>() {{
+                    put("result", false);
+                    put("error", "Данная страница находится за пределами сайтов," +
+                            " указанных в конфигурационном файле");
+                }};
             }
         } catch (Exception ex) {
             System.err.println(ex.getClass() + "---" + ex.getMessage());
         }
-        return false;
+        return new HashMap<>() {{
+            put("result", false);
+            put("error", "Возникла ошибка. повторите пожалуйста повторите запрос позже");
+        }};
     }
 
     private String getSiteUrlForReturnFromRepository(String url) {
@@ -203,6 +237,16 @@ public class IndexingServiceImpl implements IndexingService {
     @Override
     public void fillingMapCountPages(String urlSite, int countPages) {
         countPagesBySite.put(urlSite,countPages);
+    }
+
+    @Override
+    public ConcurrentHashMap<Integer, HashMap<String, Set<String>>> getMap() {
+        return map;
+    }
+
+    @Override
+    public void fillingMap(Integer id, HashMap<String, Set<String>> mapWordOfFound) {
+        map.put(id,mapWordOfFound);
     }
 }
 
