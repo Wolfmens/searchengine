@@ -4,8 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import searchengine.config.SerenaSearchBot;
 import searchengine.model.Page;
@@ -32,7 +30,8 @@ public class IndexingServiceImpl implements IndexingService {
     private final SerenaSearchBot serenaSearchBot;
     private HashMap<String, Integer> countPagesBySite = new HashMap<>();
     private final String[] TYPES = {".png", ".jpeg", ".jpg", ".pdf"};
-    private ConcurrentHashMap<Integer,HashMap<String,Set<String>>> map = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<Integer,HashMap<String,Set<String>>> mapOfPositionWordsByPage
+            = new ConcurrentHashMap<>();
 
     @Autowired
     private SitesRepository sitesRepository;
@@ -48,6 +47,7 @@ public class IndexingServiceImpl implements IndexingService {
         if (!isStatusIndex){
             setStatusIndex(true);
             if (deleteDataBySite()) {
+                mapOfPositionWordsByPage.clear();
                 setSitesAndPagesToRepository();
                 return new HashMap<>() {{
                     put("result", true);
@@ -239,14 +239,13 @@ public class IndexingServiceImpl implements IndexingService {
         countPagesBySite.put(urlSite,countPages);
     }
 
-    @Override
-    public ConcurrentHashMap<Integer, HashMap<String, Set<String>>> getMap() {
-        return map;
+    public ConcurrentHashMap<Integer, HashMap<String, Set<String>>> getMapOfPositionWordsByPage() {
+        return mapOfPositionWordsByPage;
     }
 
     @Override
     public void fillingMap(Integer id, HashMap<String, Set<String>> mapWordOfFound) {
-        map.put(id,mapWordOfFound);
+        mapOfPositionWordsByPage.put(id,mapWordOfFound);
     }
 }
 

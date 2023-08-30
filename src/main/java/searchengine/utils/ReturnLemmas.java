@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReturnLemmas {
 
-    private final String[] SERVICE_FORMS = {"ПРЕДЛ", "СОЮЗ", "МЕЖД"};
     private final IndexingService indexingService;
     private final Site site;
     private final Page page;
@@ -30,7 +29,7 @@ public class ReturnLemmas {
         String[] textForGetLemmas = getMassiveElementsFromContent(text);
         List<String> wordBaseForms = new ArrayList<>();
         for (String word : textForGetLemmas) {
-            if (!checkWordByServiceForm(word, luceneMorphology)) {
+            if (!ApplicationConstantsAndChecks.checkWordByServiceForm(word, luceneMorphology)) {
                 String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
                 if (!wordBaseForms.contains(wordBaseForm)) {
                     addLemmaToRepository(wordBaseForm);
@@ -44,14 +43,14 @@ public class ReturnLemmas {
     }
 
     private void getFindWordsInPage (String text, String word){
-        Pattern pattern = Pattern.compile("[А-Яа-я\\s]*\\s*" + word + "\\s*[А-Яа-я\\s]*");
+        Pattern pattern = Pattern.compile("[А-Яа-я\\s,]*\\s*,*" + word + ",*\\s*[А-Яа-я\\s,]*");
         Matcher matcher = pattern.matcher(text);
         Set<String> results = matcher.results()
                 .map(r -> r.group().strip())
                 .collect(Collectors.toSet());
         HashMap<String,Set<String>> mapWordAndFindInText = new HashMap<>(){{put(word,results);}};
-        if (indexingService.getMap().containsKey(page.getId())){
-            mapWordAndFindInText.putAll(indexingService.getMap().get(page.getId()));
+        if (indexingService.getMapOfPositionWordsByPage().containsKey(page.getId())){
+            mapWordAndFindInText.putAll(indexingService.getMapOfPositionWordsByPage().get(page.getId()));
             indexingService.fillingMap(page.getId(), mapWordAndFindInText);
         } else {
             indexingService.fillingMap(page.getId(), mapWordAndFindInText);
@@ -60,8 +59,15 @@ public class ReturnLemmas {
 
     private void addIndexToRepository() {
         for (Map.Entry<String, Integer> entry : lemmasMap.entrySet()) {
-            Lemma lemma = indexingService.getLemmaRepository().findByLemma(entry.getKey()).get(0);
-            createIndexAndAddHimInRepository(lemma,entry.getValue());
+            Optional<Lemma> optionalLemma = indexingService.getLemmaRepository()
+                    .findByLemma(entry.getKey())
+                    .stream()
+                    .filter(l -> l.getSiteId().getId() == site.getId())
+                    .findFirst();
+            if (optionalLemma.isPresent()) {
+                Lemma lemma = optionalLemma.get();
+                createIndexAndAddHimInRepository(lemma, entry.getValue());
+            }
         }
     }
 
@@ -73,28 +79,16 @@ public class ReturnLemmas {
         }
     }
 
-    private boolean checkWordByServiceForm(String word, LuceneMorphology luceneMorphology) {
-        for (String form : SERVICE_FORMS) {
-            if (luceneMorphology.getMorphInfo(word).get(0).contains(form)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private String getStringsOfURL(String uri) throws Exception {
         return uri.replaceAll("[^А-Яа-я]+", " ");
     }
 
-    private boolean hasLemmaInRepository(String lemma) {
-        List<Lemma> hasLemma = indexingService.getLemmaRepository().findByLemma(lemma);
-        return hasLemma.isEmpty();
-    }
-
     private void addLemmaToRepository(String lemma) {
+        List<Lemma> hasLemma = indexingService.getLemmaRepository().findByLemma(lemma);
         Lemma lemmaEntity;
-        if (!hasLemmaInRepository(lemma)) {
-            lemmaEntity = indexingService.getLemmaRepository().findByLemma(lemma).get(0);
+        Optional<Lemma> lemma1 = hasLemma.stream().filter(s -> s.getSiteId().getId() == site.getId()).findFirst();
+        if (!hasLemma.isEmpty() && lemma1.isPresent()) {
+            lemmaEntity = lemma1.get();
             int frequency = lemmaEntity.getFrequency();
             lemmaEntity.setFrequency(frequency + 1);
         } else {
@@ -110,9 +104,10 @@ public class ReturnLemmas {
         LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
         String[] textForGetLemmas = getMassiveElementsFromContent(content);
         for (String word : textForGetLemmas) {
-            if (!checkWordByServiceForm(word, luceneMorphology)) {
+            if (!ApplicationConstantsAndChecks.checkWordByServiceForm(word, luceneMorphology)) {
                 String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
                 addLemmaToMap(wordBaseForm);
+                getFindWordsInPage(content,word);
             }
         }
         List<Index> indexesByPage = indexingService.getIndexLemmaRepository().findAllByPageId(page);

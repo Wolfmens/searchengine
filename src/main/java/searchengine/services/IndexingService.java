@@ -32,6 +32,6 @@ public interface IndexingService {
     String[] getTypes();
     void fillingMapCountPages();
     void fillingMapCountPages(String urlSite, int countPages);
-    ConcurrentHashMap<Integer,HashMap<String, Set<String>>> getMap();
+    ConcurrentHashMap<Integer,HashMap<String, Set<String>>> getMapOfPositionWordsByPage();
     void fillingMap(Integer id, HashMap<String, Set<String>> mapWordOfFound);
 }

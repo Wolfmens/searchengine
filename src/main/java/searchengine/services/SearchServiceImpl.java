@@ -1,36 +1,33 @@
 package searchengine.services;
 
-import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.apache.lucene.morphology.LuceneMorphology;
+import org.apache.lucene.morphology.english.EnglishLuceneMorphology;
+import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.stereotype.Service;
 import searchengine.dto.search.DataSearchItem;
 import searchengine.dto.search.SearchResponse;
 import searchengine.model.*;
+import searchengine.utils.ApplicationConstantsAndChecks;
 
-import java.text.DecimalFormat;
+import java.io.IOException;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
-@RequiredArgsConstructor
+@AllArgsConstructor
 public class SearchServiceImpl implements SearchService {
 
     private final IndexingService indexingService;
-    private final String[] SERVICE_FORMS = {"ПРЕДЛ", "СОЮЗ", "МЕЖД"};
     private List<String> listLemmas;
-    private final float COEFF_FREQUENCY_LEMMA_ON_PAGES = 0.8F;
-    private final int SIZE_LIMIT_OF_SNIPPET = 180;
-    private final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.#####");
     private List<Page> pageList = new ArrayList<>();
-    private final LuceneMorphology luceneMorphology;
+    private LuceneMorphology luceneMorphology;
     private HashMap<String,Integer> mapOfCountPagesBySite;
 
     @Override
     public Object getSearchResponse(String query, String site, Integer offset, Integer limit) {
-        if (query.isEmpty()) {
+        if (query.isEmpty() || !query.matches("[A-Za-zА-Яа-я\\s]*")) {
             return getGeneratedResponse(true, new ArrayList<>(), 0);
         }
         offset = getValueOffset(offset);
@@ -38,20 +35,55 @@ public class SearchServiceImpl implements SearchService {
 
         mapOfCountPagesBySite = indexingService.getCountPagesBySite();
         listLemmas = getFilteredAndSortedListWithLemmas(query, site);
+
         if (listLemmas.isEmpty()) {
+            if (isEnglishQuery(query)) {
+                luceneMorphology = getRussianLuceneMorphology();
+            }
             return getGeneratedResponse(true, new ArrayList<>(), 0);
         }
         fillPageList(site);
-
+        if (pageList.isEmpty()){
+            return getGeneratedResponse(true, new ArrayList<>(), 0);
+        }
         HashMap<Page, Double> mapPageByOtnRelevance = getMapPageByOtnRelevance(pageList);
-        HashMap<Page, Double> sortedMapPageByOtnRelevance =
-                getSortedMapPageByOtnRelevance(mapPageByOtnRelevance);
+        HashMap<Page, Double> sortedMapPageByOtnRelevance = getSortedMapPageByOtnRelevance(mapPageByOtnRelevance);
         List<DataSearchItem> listData = getListObjectsBySearch(sortedMapPageByOtnRelevance, listLemmas, query);
         List<DataSearchItem> listDataByLimitAndOffset = listData.stream().skip(offset).limit(limit).toList();
+
+        luceneMorphology = getRussianLuceneMorphology();
         pageList.clear();
 
         return getGeneratedResponse(true, listDataByLimitAndOffset, listData.size());
     }
+
+
+
+    private boolean isEnglishQuery(String query) {
+        String[] queryElements = query.split(" ");
+        Optional<String> isOptionalCheckLanguage = Arrays.stream(queryElements)
+                        .filter(el -> el.matches(ApplicationConstantsAndChecks.ENGLISH_CHECK_REGEX)).findFirst();
+        return isOptionalCheckLanguage.isPresent();
+    }
+
+    private LuceneMorphology getEnglishLuceneMorphology () {
+        try {
+            return new EnglishLuceneMorphology();
+        } catch (IOException ex) {
+            System.err.println(ex.getClass() + "---" + ex.getMessage());;
+        }
+        return null;
+    }
+
+    private LuceneMorphology getRussianLuceneMorphology () {
+        try {
+            return new RussianLuceneMorphology();
+        } catch (IOException ex) {
+            System.err.println(ex.getClass() + "---" + ex.getMessage());;
+        }
+        return null;
+    }
+
 
     private int getValueLimit(Integer limit) {
         if (limit == null) {
@@ -70,10 +102,17 @@ public class SearchServiceImpl implements SearchService {
     private void fillPageList (String site){
         if (site == null) {
             for (Site siteFromRepository : indexingService.getSitesRepository().findAll()) {
-                List<String> listLemmasFilter = listLemmas.stream()
-                        .filter(l -> indexingService.getLemmaRepository().findByLemma(l).get(0)
-                                .getSiteId().getId() == siteFromRepository.getId())
-                        .toList();
+                List<String> listLemmasFilter = new ArrayList<>();
+                for (String wordLemma : listLemmas){
+                    Optional<Lemma> optionalLemma = indexingService.getLemmaRepository()
+                            .findByLemma(wordLemma)
+                            .stream()
+                            .filter(l -> l.getSiteId().getId() == siteFromRepository.getId())
+                            .findFirst();
+                    if (optionalLemma.isPresent()){
+                        listLemmasFilter.add(wordLemma);
+                    }
+                }
                 if (!listLemmasFilter.isEmpty()) {
                     pageList.addAll(getFilterPageList(siteFromRepository.getUrl(), listLemmasFilter));
                 }
@@ -95,9 +134,9 @@ public class SearchServiceImpl implements SearchService {
     private HashMap<Page, Double> getMapPageByOtnRelevance(List<Page> pageList) {
         HashMap<Page, Float> mapPageByAbsRelevance = new HashMap<>();
         HashMap<Page, Double> mapPageByOtnRelevance = new HashMap<>();
-        List<Lemma> list = listLemmas.stream()
-                .map(l -> indexingService.getLemmaRepository().findByLemma(l).get(0))
-                .toList();
+        List<Lemma> list = new ArrayList<>();
+        listLemmas.forEach(l -> list.addAll(indexingService.getLemmaRepository().findByLemma(l)));
+
         for (Page page : pageList) {
             float absRel = 0;
             for (Lemma lemma : list) {
@@ -128,42 +167,52 @@ public class SearchServiceImpl implements SearchService {
 
     private List<Page> getFilterPageList(String site, List<String> listLemmas) {
         Site siteFromRepository = indexingService.getSitesRepository().findByUrl(site).get();
-        Lemma rareLemmaFromRepository = indexingService.getLemmaRepository().findByLemma(listLemmas.get(0)).get(0);
-        List<Index> listOfIndexesFromRepositoryByRareLemma = indexingService.getIndexLemmaRepository()
-                                                                            .findAllByLemmaId(rareLemmaFromRepository);
-        List<Page> pageList = listOfIndexesFromRepositoryByRareLemma.stream()
-                .filter(i -> i.getPageId().getSiteId().getId() == siteFromRepository.getId())
-                .map(Index::getPageId)
-                .toList();
-        if (pageList.isEmpty()) {
-            return pageList;
+        List<Page> pageListByLemmas = getPageListByRarestLemma(listLemmas,siteFromRepository);
+        if (pageListByLemmas.isEmpty()) {
+            return pageListByLemmas;
         }
-        Iterator<Page> iterator = pageList.iterator();
+        Iterator<Page> iterator = pageListByLemmas.iterator();
         for (int i = 1; i < listLemmas.size(); i++) {
-            Lemma lemma = indexingService.getLemmaRepository().findByLemma(listLemmas.get(i)).get(0);
-            if (lemma.getSiteId().getId() != siteFromRepository.getId()) {
-                continue;
-            }
-            List<Index> listOfIndexesFromRepositoryByLemma = indexingService.getIndexLemmaRepository()
-                                                                            .findAllByLemmaId(lemma);
-            while (iterator.hasNext()) {
-                Page page = iterator.next();
-                Optional<Index> optional =
-                        listOfIndexesFromRepositoryByLemma.stream()
-                                .filter(in -> in.getPageId().getId() == page.getId())
-                                .findAny();
-                if (!optional.isPresent() && !optional.isEmpty()) {
-                    iterator.remove();
+            Optional<Lemma> lemmaOptionalByNextLemma = getOptionalByLemma(listLemmas.get(i),siteFromRepository);
+            if (lemmaOptionalByNextLemma.isPresent()) {
+                Lemma lemma = lemmaOptionalByNextLemma.get();
+                List<Index> listOfIndexesFromRepositoryByLemma =
+                        indexingService.getIndexLemmaRepository().findAllByLemmaId(lemma);
+                while (iterator.hasNext()) {
+                    Page page = iterator.next();
+                    Optional<Index> optional = listOfIndexesFromRepositoryByLemma.stream()
+                            .filter(in -> in.getPageId().getId() == page.getId())
+                            .findAny();
+                    if (!optional.isPresent() && !optional.isEmpty()) {
+                        iterator.remove();
+                    }
                 }
             }
         }
-        return pageList;
+        return pageListByLemmas;
     }
 
+    private List<Page> getPageListByRarestLemma (List<String> listLemmas, Site site) {
+        Optional<Lemma> rarestLemmaOptional = getOptionalByLemma(listLemmas.get(0),site);
+        Lemma rarestLemmaFromRepository = rarestLemmaOptional.orElse(new Lemma());
+        return indexingService.getIndexLemmaRepository()
+                .findAllByLemmaId(rarestLemmaFromRepository).stream()
+                .filter(i -> i.getPageId().getSiteId().getId() == site.getId())
+                .map(Index::getPageId)
+                .toList();
+    }
+
+    private Optional<Lemma> getOptionalByLemma(String lemma, Site site) {
+        return indexingService.getLemmaRepository()
+                .findByLemma(lemma)
+                .stream()
+                .filter(l -> l.getSiteId().getId() == site.getId())
+                .findFirst();
+    }
 
     private List<DataSearchItem> getListObjectsBySearch(Map<Page, Double> map, List<String> lemmas, String query) {
         List<DataSearchItem> list = new ArrayList<>();
-        String[] queryElements = query.split(" ");
+
         for (Map.Entry<Page, Double> entry : map.entrySet()) {
             HashSet<String> setSentencesFromPage = new HashSet<>();
             HashSet<String> setSentencesFromPageWithSecretions = new HashSet<>();
@@ -171,8 +220,8 @@ public class SearchServiceImpl implements SearchService {
             Site site = page.getSiteId();
             StringBuilder builder = new StringBuilder();
 
-            fillingSetSentences(queryElements,lemmas,page,setSentencesFromPage);
-            fillingSetSentencesWithSecretions(setSentencesFromPage,lemmas,queryElements,setSentencesFromPageWithSecretions);
+            fillingSetSentences(query,lemmas,page,setSentencesFromPage);
+            fillingSetSentencesWithSecretions(setSentencesFromPage,query,setSentencesFromPageWithSecretions);
             fillingBuilderSnippet(setSentencesFromPageWithSecretions,builder);
 
             if (builder.toString().isBlank()) {
@@ -193,21 +242,28 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private double getOntRelValue(double oldValue) {
-        String replaceSign = DECIMAL_FORMAT.format(oldValue).replace(",", ".");
+        String replaceSign =
+                ApplicationConstantsAndChecks.DECIMAL_FORMAT.format(oldValue).replace(",", ".");
         return Double.parseDouble(replaceSign);
     }
 
-    private void fillingSetSentences(String[] elements,
+    private void fillingSetSentences(String query,
                                      List<String> lemmas,
                                      Page page,
                                      HashSet<String> set) {
-        for (String queryWord : elements) {
+        String[] queryElements = query.split(" ");
+        for (String queryWord : queryElements) {
+            if (isEnglishQuery(query)){
+                luceneMorphology = queryWord.matches(ApplicationConstantsAndChecks.ENGLISH_CHECK_REGEX) ?
+                        getEnglishLuceneMorphology():
+                        getRussianLuceneMorphology();
+            }
             String lemmaFromQuery = luceneMorphology.getNormalForms(queryWord.toLowerCase()).get(0).strip();
             if (!lemmas.contains(lemmaFromQuery)) {
                 continue;
             }
             HashMap<String, Set<String>> mapWordsAndSentencesWithThem
-                    = indexingService.getMap().get(page.getId());
+                    = indexingService.getMapOfPositionWordsByPage().get(page.getId());
             Set<String> setSentencesByPageFromBase = mapWordsAndSentencesWithThem.get(queryWord);
             if (setSentencesByPageFromBase == null) {
                 continue;
@@ -217,17 +273,13 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private void fillingSetSentencesWithSecretions(HashSet<String> setBeforeChange,
-                                                   List<String> lemmas,
-                                                   String[] elements,
+                                                   String query,
                                                    HashSet<String> setAfterChange) {
+        String[] queryElements = query.split(" ");
         for (String sentence : setBeforeChange) {
             String wordChanged = sentence;
-            for (String wordFromQuery : elements) {
-                String lemmaFromQuery = luceneMorphology.getNormalForms(wordFromQuery.toLowerCase()).get(0).strip();
+            for (String wordFromQuery : queryElements) {
                 if (!sentence.contains(wordFromQuery)) {
-                    continue;
-                }
-                if (!lemmas.contains(lemmaFromQuery)) {
                     continue;
                 }
                 wordChanged = wordChanged.replace(wordFromQuery, "<b>" + wordFromQuery + "</b>");
@@ -238,7 +290,7 @@ public class SearchServiceImpl implements SearchService {
 
     private void fillingBuilderSnippet(HashSet<String> set, StringBuilder builder) {
         for (String sentence : set){
-            if (builder.length() <= SIZE_LIMIT_OF_SNIPPET){
+            if (builder.length() <= ApplicationConstantsAndChecks.SIZE_LIMIT_OF_SNIPPET){
                 builder.append(sentence).append("...");
             }
         }
@@ -257,7 +309,12 @@ public class SearchServiceImpl implements SearchService {
         try {
             String[] elementsOfQuery = query.split(" ");
             for (String word : elementsOfQuery) {
-                if (!checkWordByServiceForm(word, luceneMorphology)) {
+                if (isEnglishQuery(query)){
+                    luceneMorphology = word.matches(ApplicationConstantsAndChecks.ENGLISH_CHECK_REGEX) ?
+                            getEnglishLuceneMorphology():
+                            getRussianLuceneMorphology();
+                }
+                if (!ApplicationConstantsAndChecks.checkWordByServiceForm(word, luceneMorphology)) {
                     String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
                     boolean hasLemmaInRepository = indexingService.getLemmaRepository()
                             .findByLemma(wordBaseForm)
@@ -273,23 +330,16 @@ public class SearchServiceImpl implements SearchService {
         return listLemmas;
     }
 
-    private boolean checkWordByServiceForm(String word, LuceneMorphology luceneMorphology) {
-        for (String form : SERVICE_FORMS) {
-            if (luceneMorphology.getMorphInfo(word.toLowerCase()).get(0).contains(form)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void excludingLemmasFromListThereTooMany(List<String> lemmas, Site site) {
         int countPageOnList = mapOfCountPagesBySite.get(site.getUrl());
-        int eightyPercentOfSite = (int) (countPageOnList * COEFF_FREQUENCY_LEMMA_ON_PAGES);
+        int eightyPercentOfSite =
+                (int) (countPageOnList * ApplicationConstantsAndChecks.COEFF_FREQUENCY_LEMMA_ON_PAGES);
         Iterator<String> iterator = lemmas.iterator();
 
         while (iterator.hasNext()) {
             Lemma lemmaEntity;
-            Optional<Lemma> lemmaOptional = indexingService.getLemmaRepository().findByLemma(iterator.next())
+            Optional<Lemma> lemmaOptional = indexingService.getLemmaRepository()
+                    .findByLemma(iterator.next())
                     .stream()
                     .filter(l -> l.getSiteId().getId() == site.getId())
                     .findAny();
@@ -329,8 +379,13 @@ public class SearchServiceImpl implements SearchService {
             Site siteFromRepository = indexingService.getSitesRepository().findByUrl(site).get();
             Iterator<String> iterator = lemmas.iterator();
             while (iterator.hasNext()) {
-                Lemma lemma = indexingService.getLemmaRepository().findByLemma(iterator.next()).get(0);
-                if (lemma.getSiteId().getId() != siteFromRepository.getId()) {
+                Optional<Lemma> lemmaOption =
+                        indexingService.getLemmaRepository()
+                                .findByLemma(iterator.next())
+                                .stream()
+                                .filter(l -> l.getSiteId().getId() == siteFromRepository.getId())
+                                .findFirst();
+                if (!lemmaOption.isPresent()) {
                     iterator.remove();
                 }
             }

@@ -76,7 +76,10 @@ public class BypassSites extends RecursiveTask<Boolean> {
         boolean hasLinksInRootNode = nodeWebsite.getLinks().contains(url);
         boolean hasPathInGeneralList = indexingService.getPathList().contains(url);
 
-        return hasLinksInRootNode || hasPathInGeneralList || hasNotURLByElementsWebsite || hasUrlIsNotImage(url);
+        return hasLinksInRootNode ||
+               hasPathInGeneralList ||
+               hasNotURLByElementsWebsite ||
+               ApplicationConstantsAndChecks.hasUrlIsNotImage(url);
     }
 
     private boolean hasHttpProtocolUrlAndHeadURL (String url) {
@@ -100,7 +103,7 @@ public class BypassSites extends RecursiveTask<Boolean> {
 
     private void addPageToRepositoryIfBypassStop(String url) throws Exception {
         Page page = new Page();
-        if (!hasUrlIsNotImage(url)) {
+        if (!ApplicationConstantsAndChecks.hasUrlIsNotImage(url)) {
             getDocumentAndWorkWithRepositories(url, page);
         }
     }
