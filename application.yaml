@@ -23,8 +23,8 @@ indexing-settings:
 #      name: ипфран.ру
 #    - url: https://skillbox.ru
 #      name: Skillbox
-    - url: https://www.playback.ru
-      name: PlayBack.Ru
+#    - url: https://www.playback.ru
+#      name: PlayBack.Ru
     - url: https://www.svetlovka.ru
       name: светловка.ру
 

@@ -126,15 +126,6 @@ public class BypassSites extends RecursiveTask<Boolean> {
         return document;
     }
 
-    private boolean hasUrlIsNotImage (String url) {
-        for (String type : indexingService.getTypes()){
-            if (url.contains(type)){
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void forkBypass (String url,  LinkedHashSet<BypassSites> subTask){
         NodeWebsite child = new NodeWebsite(url, nodeWebsite.getSite());
         BypassSites bypassTask = new BypassSites(child, indexingService);

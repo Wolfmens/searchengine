@@ -2,6 +2,7 @@ package searchengine.utils;
 
 import lombok.RequiredArgsConstructor;
 import org.apache.lucene.morphology.LuceneMorphology;
+import org.apache.lucene.morphology.english.EnglishLuceneMorphology;
 import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import searchengine.model.Index;
 import searchengine.model.Lemma;
@@ -25,8 +26,14 @@ public class ReturnLemmas {
 
 
     public void getLemmas(String text) throws Exception {
+        addRusLemmasToRepository(text);
+        addUSLemmasToRepository(text);
+        addIndexToRepository();
+    }
+
+    private void addRusLemmasToRepository(String text) throws Exception{
         LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
-        String[] textForGetLemmas = getMassiveElementsFromContent(text);
+        String[] textForGetLemmas = getMassiveElementsFromContentByRus(text);
         List<String> wordBaseForms = new ArrayList<>();
         for (String word : textForGetLemmas) {
             if (!ApplicationConstantsAndChecks.checkWordByServiceForm(word, luceneMorphology)) {
@@ -39,11 +46,26 @@ public class ReturnLemmas {
                 addLemmaToMap(wordBaseForm);
             }
         }
-        addIndexToRepository();
+    }
+
+    private void addUSLemmasToRepository(String text) throws Exception {
+        LuceneMorphology luceneMorphology = new EnglishLuceneMorphology();
+        String[] textForGetLemmas = getMassiveElementsFromContentByUS(text);
+        List<String> wordBaseForms = new ArrayList<>();
+        for (String word : textForGetLemmas) {
+            String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
+            if (!wordBaseForms.contains(wordBaseForm)) {
+                addLemmaToRepository(wordBaseForm);
+                getFindWordsInPage(text, word);
+            }
+            wordBaseForms.add(wordBaseForm);
+            addLemmaToMap(wordBaseForm);
+        }
     }
 
     private void getFindWordsInPage (String text, String word){
-        Pattern pattern = Pattern.compile("[А-Яа-я\\s,]*\\s*,*" + word + ",*\\s*[А-Яа-я\\s,]*");
+        Pattern pattern =
+                Pattern.compile("[А-Яа-яA-Za-z\\s,.0-9]{0,150}\\s*,*" + word + ",*\\s*[А-Яа-яA-Za-z\\s,0-9]{0,150}");
         Matcher matcher = pattern.matcher(text);
         Set<String> results = matcher.results()
                 .map(r -> r.group().strip())
@@ -79,8 +101,12 @@ public class ReturnLemmas {
         }
     }
 
-    private String getStringsOfURL(String uri) throws Exception {
+    private String getStringsOfURLByRus(String uri) {
         return uri.replaceAll("[^А-Яа-я]+", " ");
+    }
+
+    private String getStringsOfURLByUS(String uri) {
+        return uri.replaceAll("[^A-Za-z]+", " ");
     }
 
     private void addLemmaToRepository(String lemma) {
@@ -102,7 +128,7 @@ public class ReturnLemmas {
 
     public void updateLemmas(String content) throws Exception {
         LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
-        String[] textForGetLemmas = getMassiveElementsFromContent(content);
+        String[] textForGetLemmas = getMassiveElementsFromContentByRus(content);
         for (String word : textForGetLemmas) {
             if (!ApplicationConstantsAndChecks.checkWordByServiceForm(word, luceneMorphology)) {
                 String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
@@ -133,10 +159,17 @@ public class ReturnLemmas {
         }
     }
 
-    private String[] getMassiveElementsFromContent(String content) throws Exception {
-        String textNew = getStringsOfURL(content);
+    private String[] getMassiveElementsFromContentByRus(String content) {
+        String textNew = getStringsOfURLByRus(content);
         String regex = "[^а-яА-Я\\s]";
-        String newtext = textNew.toLowerCase().replaceAll(regex, " ").strip();
+        String newtext = textNew.replaceAll(regex, " ").strip();
+        return newtext.split("\\s+");
+    }
+
+    private String[] getMassiveElementsFromContentByUS(String content) {
+        String textNew = getStringsOfURLByUS(content);
+        String regex = "[^a-zA-Z\\s]";
+        String newtext = textNew.replaceAll(regex, " ").strip();
         return newtext.split("\\s+");
     }
 

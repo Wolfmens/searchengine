@@ -51,13 +51,13 @@ public class SearchServiceImpl implements SearchService {
         List<DataSearchItem> listData = getListObjectsBySearch(sortedMapPageByOtnRelevance, listLemmas, query);
         List<DataSearchItem> listDataByLimitAndOffset = listData.stream().skip(offset).limit(limit).toList();
 
-        luceneMorphology = getRussianLuceneMorphology();
+        if (isEnglishQuery(query)) {
+            luceneMorphology = getRussianLuceneMorphology();
+        }
         pageList.clear();
 
         return getGeneratedResponse(true, listDataByLimitAndOffset, listData.size());
     }
-
-
 
     private boolean isEnglishQuery(String query) {
         String[] queryElements = query.split(" ");
@@ -136,7 +136,6 @@ public class SearchServiceImpl implements SearchService {
         HashMap<Page, Double> mapPageByOtnRelevance = new HashMap<>();
         List<Lemma> list = new ArrayList<>();
         listLemmas.forEach(l -> list.addAll(indexingService.getLemmaRepository().findByLemma(l)));
-
         for (Page page : pageList) {
             float absRel = 0;
             for (Lemma lemma : list) {
@@ -277,14 +276,20 @@ public class SearchServiceImpl implements SearchService {
                                                    HashSet<String> setAfterChange) {
         String[] queryElements = query.split(" ");
         for (String sentence : setBeforeChange) {
-            String wordChanged = sentence;
+            String wordChanged = " ".concat(sentence).concat(" ");
             for (String wordFromQuery : queryElements) {
-                if (!sentence.contains(wordFromQuery)) {
+                Optional<String> a = Arrays.asList(sentence.split(" ")).stream()
+                                                                             .filter(f -> f.equals(wordFromQuery))
+                                                                             .findFirst();
+                if (!a.isPresent()) {
                     continue;
                 }
-                wordChanged = wordChanged.replace(wordFromQuery, "<b>" + wordFromQuery + "</b>");
+                wordChanged = wordChanged.replaceAll("[^А-Яа-я]" + wordFromQuery + "[^А-Яа-я]"
+                                                      , " <b>" + wordFromQuery + "</b> ");
             }
-            setAfterChange.add(wordChanged);
+            if (!wordChanged.strip().equals(sentence)) {
+                setAfterChange.add(wordChanged.strip());
+            }
         }
     }
 
