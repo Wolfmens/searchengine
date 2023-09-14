@@ -10,16 +10,14 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface PageRepository extends JpaRepository<Page,Integer> {
+public interface PageRepository extends JpaRepository<Page, Integer> {
 
     @Transactional
     List<Page> deleteBySiteId(Site site);
 
-    Optional<Page> findByPath (String path);
+    Optional<Page> findByPath(String path);
 
-    List<Page> findAllBySiteId (Site site);
-
-
+    List<Page> findAllBySiteId(Site site);
 
 
 }

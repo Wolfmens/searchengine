@@ -36,23 +36,24 @@ public class BypassSites extends RecursiveTask<Boolean> {
         try {
             Thread.sleep(500);
             LinkedHashSet<BypassSites> subTask = new LinkedHashSet<>();
-            Document document = getDocumentAndWorkWithRepositories(url,page);
-            if (isStatusCodeGood(page)){
+            Document document = getDocumentAndWorkWithRepositories(url, page);
+            if (isStatusCodeGood(page)) {
                 return indexingService.isStatusIndex();
             }
             Elements elements = document.select("a");
             for (Element element : elements) {
                 String urlOfElement = element.attr("abs:href");
-                if (hasHttpProtocolUrlAndHeadURL(urlOfElement)) {
-                    if (hasLinksInRootNodeAndPathInGeneralListAndNotURLByElementsWebsite(urlOfElement)) {
-                        continue;
-                    }
-                    if (!indexingService.isStatusIndex()) {
-                        addPageToRepositoryIfBypassStop(urlOfElement);
-                        System.err.println(urlOfElement + " - " + " завершено");
-                    } else {
-                        forkBypass(urlOfElement, subTask);
-                    }
+                if (!hasHttpProtocolUrlAndHeadURL(urlOfElement)) {
+                    continue;
+                }
+                if (hasLinksInRootNodeAndPathInGeneralListAndNotURLByElementsWebsite(urlOfElement)) {
+                    continue;
+                }
+                if (!indexingService.isStatusIndex()) {
+                    addPageToRepositoryIfBypassStop(urlOfElement);
+                    System.err.println(urlOfElement + " - " + " завершено");
+                } else {
+                    forkBypass(urlOfElement, subTask);
                 }
             }
             subTask.forEach(BypassSites::join);
@@ -64,31 +65,31 @@ public class BypassSites extends RecursiveTask<Boolean> {
         return indexingService.isStatusIndex();
     }
 
-    private void settingErrorStatusBySiteInRepository (String error){
+    private void settingErrorStatusBySiteInRepository(String error) {
         Site site = nodeWebsite.getSite();
         site.setStatus(Type.FAILED);
         site.setLastError(error);
         indexingService.getSitesRepository().save(site);
     }
 
-    private boolean hasLinksInRootNodeAndPathInGeneralListAndNotURLByElementsWebsite (String url) {
+    private boolean hasLinksInRootNodeAndPathInGeneralListAndNotURLByElementsWebsite(String url) {
         boolean hasNotURLByElementsWebsite = url.matches(nodeWebsite.getSite().getUrl() + ".*#.*");
         boolean hasLinksInRootNode = nodeWebsite.getLinks().contains(url);
         boolean hasPathInGeneralList = indexingService.getPathList().contains(url);
 
         return hasLinksInRootNode ||
-               hasPathInGeneralList ||
-               hasNotURLByElementsWebsite ||
-               ApplicationConstantsAndChecks.hasUrlIsNotImage(url);
+                hasPathInGeneralList ||
+                hasNotURLByElementsWebsite ||
+                ApplicationConstantsAndChecks.hasUrlIsNotImage(url);
     }
 
-    private boolean hasHttpProtocolUrlAndHeadURL (String url) {
+    private boolean hasHttpProtocolUrlAndHeadURL(String url) {
         boolean hasHeadURL = url.matches(nodeWebsite.getSite().getUrl() + "/.+");
         boolean hasHttpProtocolUrl = url.matches("http.*");
         return hasHttpProtocolUrl && hasHeadURL;
     }
 
-    private boolean isStatusCodeGood(Page page){
+    private boolean isStatusCodeGood(Page page) {
         String statusCode = String.valueOf(page.getCode());
         return statusCode.startsWith("4") || statusCode.startsWith("5");
     }
@@ -108,7 +109,7 @@ public class BypassSites extends RecursiveTask<Boolean> {
         }
     }
 
-    private Document getDocumentAndWorkWithRepositories (String url, Page page) throws Exception {
+    private Document getDocumentAndWorkWithRepositories(String url, Page page) throws Exception {
         Connection connection = Jsoup.connect(url).timeout(200000)
                 .userAgent(indexingService.getSerenaSearchBot().getUserAgent())
                 .referrer(indexingService.getSerenaSearchBot().getReferrer()).ignoreHttpErrors(true);
@@ -126,7 +127,7 @@ public class BypassSites extends RecursiveTask<Boolean> {
         return document;
     }
 
-    private void forkBypass (String url,  LinkedHashSet<BypassSites> subTask){
+    private void forkBypass(String url, LinkedHashSet<BypassSites> subTask) {
         NodeWebsite child = new NodeWebsite(url, nodeWebsite.getSite());
         BypassSites bypassTask = new BypassSites(child, indexingService);
         bypassTask.fork();
@@ -134,14 +135,14 @@ public class BypassSites extends RecursiveTask<Boolean> {
         nodeWebsite.addLink(url, child);
     }
 
-    private void saveToRepository(Page page){
+    private void saveToRepository(Page page) {
         indexingService.getPageRepository().save(page);
         nodeWebsite.getSite().setStatusTime(LocalDateTime.now());
         indexingService.getSitesRepository().save(nodeWebsite.getSite());
     }
 
-    private void transformationWebHtmlInLemmas (Document doc, Page page) throws Exception {
-            ReturnLemmas returnLemmas = new ReturnLemmas(indexingService, nodeWebsite.getSite(), page);
-            returnLemmas.getLemmas(doc.toString());
+    private void transformationWebHtmlInLemmas(Document doc, Page page) throws Exception {
+        ReturnLemmas returnLemmas = new ReturnLemmas(indexingService, nodeWebsite.getSite(), page);
+        returnLemmas.getLemmas(doc.toString());
     }
 }

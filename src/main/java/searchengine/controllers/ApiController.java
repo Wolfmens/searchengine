@@ -45,13 +45,12 @@ public class ApiController {
     }
 
     @GetMapping(value = "/search", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Object> search (@RequestParam(required = false) String query,
-                                          @RequestParam(required = false) String site,
-                                          @RequestParam Integer offset,
-                                          @RequestParam Integer limit){
+    public ResponseEntity<Object> search(@RequestParam(required = false) String query,
+                                         @RequestParam(required = false) String site,
+                                         @RequestParam Integer offset,
+                                         @RequestParam Integer limit) {
         return ResponseEntity.ok().body(searchService.getSearchResponse(query, site, offset, limit));
     }
-
 
 
 }

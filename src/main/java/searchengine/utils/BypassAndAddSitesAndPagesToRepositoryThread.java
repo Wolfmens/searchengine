@@ -27,14 +27,14 @@ public class BypassAndAddSitesAndPagesToRepositoryThread extends Thread {
 
     @Override
     public void run() {
-        if (isCheckUrl(siteConfig.getUrl())){
+        if (isCheckUrl(siteConfig.getUrl())) {
             createSiteEntityIf404();
         } else {
             createSiteEntityIf200();
         }
     }
 
-    private void createSiteEntityIf200 () {
+    private void createSiteEntityIf200() {
         Site site = new Site();
         site.setUrl(siteConfig.getUrl());
         site.setStatus(Type.INDEXING);
@@ -45,7 +45,7 @@ public class BypassAndAddSitesAndPagesToRepositoryThread extends Thread {
         repository.save(site);
     }
 
-    private void createSiteEntityIf404 () {
+    private void createSiteEntityIf404() {
         Site site = new Site();
         site.setUrl(siteConfig.getUrl());
         site.setStatus(Type.FAILED);
@@ -55,11 +55,11 @@ public class BypassAndAddSitesAndPagesToRepositoryThread extends Thread {
         repository.save(site);
     }
 
-    private boolean isCheckUrl (String url) {
+    private boolean isCheckUrl(String url) {
         try {
             Connection connection = Jsoup.connect(url).ignoreHttpErrors(true);
             int statusCode = connection.execute().statusCode();
-            if (statusCode == 404){
+            if (statusCode == 404) {
                 return true;
             }
         } catch (Exception e) {

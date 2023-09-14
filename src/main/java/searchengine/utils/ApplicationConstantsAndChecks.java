@@ -20,26 +20,24 @@ public interface ApplicationConstantsAndChecks {
 
     DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.#####");
     String ENGLISH_CHECK_REGEX = "[A-Za-z]*";
+    String EXCEPT_RUS_LETTERS_REGEX = "^а-яА-Я";
+    String EXCEPT_US_LETTERS_REGEX = "^a-zA-Z";
+    String REGEX_CHECK_QUERY_FOR_NOT_WORD = "[A-Za-zА-Яа-я\\s]*";
 
     static boolean checkWordByServiceForm(String word, LuceneMorphology luceneMorphology) {
         String normalFormOfWord = luceneMorphology.getMorphInfo(word.toLowerCase()).get(0);
-        
+
         return normalFormOfWord.contains(ApplicationConstantsAndChecks.PRETEXT_FORMS) ||
-               normalFormOfWord.contains(ApplicationConstantsAndChecks.UNION_FORMS) ||
-               normalFormOfWord.contains(ApplicationConstantsAndChecks.INTERJECTION_FORMS);
+                normalFormOfWord.contains(ApplicationConstantsAndChecks.UNION_FORMS) ||
+                normalFormOfWord.contains(ApplicationConstantsAndChecks.INTERJECTION_FORMS);
     }
 
-    static boolean hasUrlIsNotImage (String url) {
+    static boolean hasUrlIsNotImage(String url) {
         return url.contains(PDF_FORMAT) ||
-               url.contains(JPEG_FORMAT) ||
-               url.contains(JPG_FORMAT) ||
-               url.contains(PNG_FORMAT);
+                url.contains(JPEG_FORMAT) ||
+                url.contains(JPG_FORMAT) ||
+                url.contains(PNG_FORMAT);
 
 
     }
-
-
-
-
-
 }

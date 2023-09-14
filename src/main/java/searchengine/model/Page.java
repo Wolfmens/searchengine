@@ -20,7 +20,7 @@ public class Page {
     private int id;
 
     @NotNull
-    @ManyToOne(fetch = FetchType.LAZY,optional = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "site_id", nullable = false)
     private Site siteId;
 

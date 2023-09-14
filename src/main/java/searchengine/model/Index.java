@@ -18,12 +18,12 @@ public class Index {
     private int id;
 
     @NotNull
-    @ManyToOne(fetch = FetchType.LAZY,optional = false, cascade = CascadeType.REFRESH)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false, cascade = CascadeType.REFRESH)
     @JoinColumn(name = "page_id", nullable = false)
     private Page pageId;
 
     @NotNull
-    @ManyToOne(fetch = FetchType.LAZY,optional = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "lemma_id", nullable = false)
     private Lemma lemmaId;
 

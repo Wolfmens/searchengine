@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface IndexLemmaRepository extends JpaRepository<Index,Integer> {
+public interface IndexLemmaRepository extends JpaRepository<Index, Integer> {
 
     @Transactional
     List<Index> deleteByPageId(Page s);
@@ -22,6 +22,6 @@ public interface IndexLemmaRepository extends JpaRepository<Index,Integer> {
 
     List<Index> findAllByLemmaId(Lemma lemma);
 
-    Optional<Index> findByLemmaIdAndPageId (Lemma lemma, Page page);
+    Optional<Index> findByLemmaIdAndPageId(Lemma lemma, Page page);
 
 }

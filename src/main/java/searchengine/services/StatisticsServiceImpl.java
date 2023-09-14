@@ -31,25 +31,25 @@ public class StatisticsServiceImpl implements StatisticsService {
 
         List<DetailedStatisticsItem> detailed = new ArrayList<>();
         List<Site> sitesList = sites.getSites();
-        for(int i = 0; i < sitesList.size(); i++) {
+        for (int i = 0; i < sitesList.size(); i++) {
             Site site = sitesList.get(i);
             Optional<searchengine.model.Site> isSiteExistInRepository = indexingService.getSitesRepository()
                     .findByUrl(site.getUrl());
-            if (isSiteExistInRepository.isPresent()){
+            if (isSiteExistInRepository.isPresent()) {
                 searchengine.model.Site siteFromRepository = isSiteExistInRepository.get();
                 int pages = indexingService.getPageRepository().findAllBySiteId(siteFromRepository).size();
                 int lemmas = indexingService.getLemmaRepository().findAllBySiteId(siteFromRepository).size();
                 total.setPages(total.getPages() + pages);
                 total.setLemmas(total.getLemmas() + lemmas);
-                detailed.add(getDetailedStatisticsItemIfSiteExist(siteFromRepository,pages,lemmas));
-                indexingService.fillingMapCountPages(site.getUrl(),pages);
+                detailed.add(getDetailedStatisticsItemIfSiteExist(siteFromRepository, pages, lemmas));
+                indexingService.fillingMapCountPages(site.getUrl(), pages);
             } else {
                 detailed.add(getDetailedStatisticsItemIfSiteNotExist(site));
             }
         }
         changeIndexingStatus(detailed);
 
-        return getStatisticsResponse(getStatisticsData(detailed,total),true);
+        return getStatisticsResponse(getStatisticsData(detailed, total), true);
     }
 
     private DetailedStatisticsItem getDetailedStatisticsItemIfSiteExist(searchengine.model.Site site,
@@ -81,25 +81,25 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
 
-    private void changeIndexingStatus (List<DetailedStatisticsItem> detailed) {
+    private void changeIndexingStatus(List<DetailedStatisticsItem> detailed) {
         Optional<DetailedStatisticsItem> optional = detailed.stream()
-                                                                    .filter(d -> d.getStatus().equals("INDEXING"))
-                                                                    .findAny();
-        if (!optional.isPresent()){
+                .filter(d -> d.getStatus().equals("INDEXING"))
+                .findAny();
+        if (!optional.isPresent()) {
             indexingService.setStatusIndex(false);
         }
     }
 
-    private StatisticsResponse getStatisticsResponse (StatisticsData data, boolean result) {
+    private StatisticsResponse getStatisticsResponse(StatisticsData data, boolean result) {
         StatisticsResponse response = new StatisticsResponse();
         response.setStatistics(data);
         response.setResult(result);
         return response;
     }
 
-    private StatisticsData getStatisticsData (List<DetailedStatisticsItem> detailed, TotalStatistics total) {
+    private StatisticsData getStatisticsData(List<DetailedStatisticsItem> detailed, TotalStatistics total) {
         StatisticsData data = new StatisticsData();
-        if (detailed.isEmpty()){
+        if (detailed.isEmpty()) {
             data.setDetailed(new ArrayList<>());
         }
         data.setDetailed(detailed);

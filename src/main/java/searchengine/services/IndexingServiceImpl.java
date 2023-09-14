@@ -16,6 +16,7 @@ import searchengine.repositories.SitesRepository;
 import searchengine.utils.BypassAndAddSitesAndPagesToRepositoryThread;
 import searchengine.utils.ReturnLemmas;
 
+import java.net.URL;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,8 +30,7 @@ public class IndexingServiceImpl implements IndexingService {
     private volatile boolean isStatusIndex;
     private final SerenaSearchBot serenaSearchBot;
     private HashMap<String, Integer> countPagesBySite = new HashMap<>();
-    private final String[] TYPES = {".png", ".jpeg", ".jpg", ".pdf"};
-    private ConcurrentHashMap<Integer,HashMap<String,Set<String>>> mapOfPositionWordsByPage
+    private ConcurrentHashMap<Integer, HashMap<String, Set<String>>> mapOfPositionWordsByPage
             = new ConcurrentHashMap<>();
 
     @Autowired
@@ -43,8 +43,8 @@ public class IndexingServiceImpl implements IndexingService {
     private IndexLemmaRepository indexLemmaRepository;
 
     @Override
-    public HashMap<Object,Object> indexing() {
-        if (!isStatusIndex){
+    public HashMap<Object, Object> indexing() {
+        if (!isStatusIndex) {
             setStatusIndex(true);
             if (deleteDataBySite()) {
                 mapOfPositionWordsByPage.clear();
@@ -77,7 +77,7 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     @Override
-    public HashMap<Object,Object> stopIndex() {
+    public HashMap<Object, Object> stopIndex() {
         if (isStatusIndex) {
             setStatusIndex(false);
             threads.clear();
@@ -94,7 +94,7 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     @Override
-    public HashMap<Object,Object> action(String url) {
+    public HashMap<Object, Object> action(String url) {
         if (url.isBlank()) {
             return new HashMap<>() {{
                 put("result", false);
@@ -107,7 +107,9 @@ public class IndexingServiceImpl implements IndexingService {
             int statusCode = document.connection().response().statusCode();
             if (hasSite(url) && isConnectUrl(statusCode)) {
                 addOrUpdatePageToRepository(url, statusCode, content);
-                return new HashMap<>() {{put("result", true);}};
+                return new HashMap<>() {{
+                    put("result", true);
+                }};
             } else {
                 return new HashMap<>() {{
                     put("result", false);
@@ -124,13 +126,9 @@ public class IndexingServiceImpl implements IndexingService {
         }};
     }
 
-    private String getSiteUrlForReturnFromRepository(String url) {
-        String[] urlElements = url.split("/");
-        String siteUrl = "";
-        for (int i = 0; i < 3; i++) {
-            siteUrl = siteUrl.concat(urlElements[i] + "/");
-        }
-        return siteUrl.substring(0, siteUrl.length() - 1);
+    private String getSiteUrlForReturnFromRepository(String url) throws Exception {
+        URL urlObj = new URL(url);
+        return urlObj.getProtocol() + "://" + urlObj.getHost();
     }
 
     private void addOrUpdatePageToRepository(String url, int statusCode, String content) {
@@ -230,13 +228,8 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     @Override
-    public String[] getTypes() {
-        return TYPES;
-    }
-
-    @Override
     public void fillingMapCountPages(String urlSite, int countPages) {
-        countPagesBySite.put(urlSite,countPages);
+        countPagesBySite.put(urlSite, countPages);
     }
 
     public ConcurrentHashMap<Integer, HashMap<String, Set<String>>> getMapOfPositionWordsByPage() {
@@ -245,7 +238,7 @@ public class IndexingServiceImpl implements IndexingService {
 
     @Override
     public void fillingMap(Integer id, HashMap<String, Set<String>> mapWordOfFound) {
-        mapOfPositionWordsByPage.put(id,mapWordOfFound);
+        mapOfPositionWordsByPage.put(id, mapWordOfFound);
     }
 }
 

@@ -31,7 +31,7 @@ public class ReturnLemmas {
         addIndexToRepository();
     }
 
-    private void addRusLemmasToRepository(String text) throws Exception{
+    private void addRusLemmasToRepository(String text) throws Exception {
         LuceneMorphology luceneMorphology = new RussianLuceneMorphology();
         String[] textForGetLemmas = getMassiveElementsFromContentByRus(text);
         List<String> wordBaseForms = new ArrayList<>();
@@ -40,7 +40,7 @@ public class ReturnLemmas {
                 String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
                 if (!wordBaseForms.contains(wordBaseForm)) {
                     addLemmaToRepository(wordBaseForm);
-                    getFindWordsInPage(text,word);
+                    getFindWordsInPage(text, word);
                 }
                 wordBaseForms.add(wordBaseForm);
                 addLemmaToMap(wordBaseForm);
@@ -63,15 +63,19 @@ public class ReturnLemmas {
         }
     }
 
-    private void getFindWordsInPage (String text, String word){
+    private void getFindWordsInPage(String text, String word) {
         Pattern pattern =
-                Pattern.compile("[А-Яа-яA-Za-z\\s,.0-9]{0,150}\\s*,*" + word + ",*\\s*[А-Яа-яA-Za-z\\s,0-9]{0,150}");
+                Pattern.compile("[А-Яа-яA-Za-z\\s,.0-9]{0,150}\\s*,*"
+                        + word
+                        + ",*\\s*[А-Яа-яA-Za-z\\s,0-9]{0,150}");
         Matcher matcher = pattern.matcher(text);
         Set<String> results = matcher.results()
                 .map(r -> r.group().strip())
                 .collect(Collectors.toSet());
-        HashMap<String,Set<String>> mapWordAndFindInText = new HashMap<>(){{put(word,results);}};
-        if (indexingService.getMapOfPositionWordsByPage().containsKey(page.getId())){
+        HashMap<String, Set<String>> mapWordAndFindInText = new HashMap<>() {{
+            put(word, results);
+        }};
+        if (indexingService.getMapOfPositionWordsByPage().containsKey(page.getId())) {
             mapWordAndFindInText.putAll(indexingService.getMapOfPositionWordsByPage().get(page.getId()));
             indexingService.fillingMap(page.getId(), mapWordAndFindInText);
         } else {
@@ -102,11 +106,11 @@ public class ReturnLemmas {
     }
 
     private String getStringsOfURLByRus(String uri) {
-        return uri.replaceAll("[^А-Яа-я]+", " ");
+        return uri.replaceAll("[" + ApplicationConstantsAndChecks.EXCEPT_RUS_LETTERS_REGEX + "]+", " ");
     }
 
     private String getStringsOfURLByUS(String uri) {
-        return uri.replaceAll("[^A-Za-z]+", " ");
+        return uri.replaceAll("[" + ApplicationConstantsAndChecks.EXCEPT_US_LETTERS_REGEX + "]+", " ");
     }
 
     private void addLemmaToRepository(String lemma) {
@@ -133,7 +137,7 @@ public class ReturnLemmas {
             if (!ApplicationConstantsAndChecks.checkWordByServiceForm(word, luceneMorphology)) {
                 String wordBaseForm = luceneMorphology.getNormalForms(word.toLowerCase()).get(0).strip();
                 addLemmaToMap(wordBaseForm);
-                getFindWordsInPage(content,word);
+                getFindWordsInPage(content, word);
             }
         }
         List<Index> indexesByPage = indexingService.getIndexLemmaRepository().findAllByPageId(page);
@@ -149,31 +153,31 @@ public class ReturnLemmas {
                         indexingService.getIndexLemmaRepository().save(index.get());
                     }
                 } else {
-                    createIndexAndAddHimInRepository(lemma.get(0),entry.getValue());
+                    createIndexAndAddHimInRepository(lemma.get(0), entry.getValue());
                 }
             } else {
                 addLemmaToRepository(entry.getKey());
                 Lemma lemmaFromRepository = indexingService.getLemmaRepository().findByLemma(entry.getKey()).get(0);
-                createIndexAndAddHimInRepository(lemmaFromRepository,entry.getValue());
+                createIndexAndAddHimInRepository(lemmaFromRepository, entry.getValue());
             }
         }
     }
 
     private String[] getMassiveElementsFromContentByRus(String content) {
         String textNew = getStringsOfURLByRus(content);
-        String regex = "[^а-яА-Я\\s]";
+        String regex = "[" + ApplicationConstantsAndChecks.EXCEPT_RUS_LETTERS_REGEX + "\\s]";
         String newtext = textNew.replaceAll(regex, " ").strip();
         return newtext.split("\\s+");
     }
 
     private String[] getMassiveElementsFromContentByUS(String content) {
         String textNew = getStringsOfURLByUS(content);
-        String regex = "[^a-zA-Z\\s]";
+        String regex = "[" + ApplicationConstantsAndChecks.EXCEPT_US_LETTERS_REGEX + "\\s]";
         String newtext = textNew.replaceAll(regex, " ").strip();
         return newtext.split("\\s+");
     }
 
-    private void createIndexAndAddHimInRepository (Lemma lemma, float rank){
+    private void createIndexAndAddHimInRepository(Lemma lemma, float rank) {
         Index newIndex = new Index();
         newIndex.setPageId(page);
         newIndex.setLemmaId(lemma);

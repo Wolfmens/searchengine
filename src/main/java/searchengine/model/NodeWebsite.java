@@ -25,7 +25,7 @@ public class NodeWebsite {
         return links;
     }
 
-    public void addLink(String linkWeb ,NodeWebsite nodeWebsite) {
+    public void addLink(String linkWeb, NodeWebsite nodeWebsite) {
         linkChildsSet.add(nodeWebsite);
         links.add(linkWeb);
     }

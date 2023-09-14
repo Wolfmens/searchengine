@@ -7,7 +7,7 @@ import searchengine.model.Site;
 
 import java.util.List;
 
-public interface LemmaRepository extends JpaRepository<Lemma,Integer> {
+public interface LemmaRepository extends JpaRepository<Lemma, Integer> {
 
     List<Lemma> findByLemma(String word);
 
